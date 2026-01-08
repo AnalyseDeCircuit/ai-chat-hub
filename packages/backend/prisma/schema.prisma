@@ -1,0 +1,244 @@
+// Prisma Schema for AI-Chat-Hub
+// 多模型协作AI聊天平台数据库模型
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 用户相关 ====================
+
+/// 用户表
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  nickname     String?
+  avatarUrl    String?    @map("avatar_url")
+  status       UserStatus @default(ACTIVE)
+  settings     Json       @default("{}")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  lastLoginAt  DateTime?  @map("last_login_at")
+
+  // 关联
+  sessions       Session[]
+  apiKeys        ApiKey[]
+  modelConfigs   ModelConfig[]
+  usageStats     UsageStats[]
+  feedbacks      Feedback[]
+  auditLogs      AuditLog[]
+  refreshTokens  RefreshToken[]
+
+  @@map("users")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+/// 刷新令牌表
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// ==================== 会话相关 ====================
+
+/// 会话表
+model Session {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  title      String?   @db.VarChar(200)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  archivedAt DateTime? @map("archived_at")
+  isShared   Boolean   @default(false) @map("is_shared")
+  shareCode  String?   @unique @map("share_code") @db.VarChar(20)
+  metadata   Json      @default("{}")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId])
+  @@index([updatedAt(sort: Desc)])
+  @@index([shareCode])
+  @@map("sessions")
+}
+
+// ==================== 消息相关 ====================
+
+/// 消息表
+model Message {
+  id           String      @id @default(uuid())
+  sessionId    String      @map("session_id")
+  parentId     String?     @map("parent_id")
+  role         MessageRole
+  content      String
+  modelId      String?     @map("model_id")
+  tokensInput  Int         @default(0) @map("tokens_input")
+  tokensOutput Int         @default(0) @map("tokens_output")
+  version      Int         @default(1)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  metadata     Json        @default("{}")
+
+  session   Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  parent    Message?   @relation("MessageVersions", fields: [parentId], references: [id])
+  children  Message[]  @relation("MessageVersions")
+  model     Model?     @relation(fields: [modelId], references: [id])
+  feedbacks Feedback[]
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([modelId])
+  @@map("messages")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+// ==================== 模型相关 ====================
+
+/// AI模型表
+model Model {
+  id            String   @id @default(uuid())
+  provider      String   @db.VarChar(50)
+  name          String   @db.VarChar(100)
+  displayName   String   @map("display_name") @db.VarChar(100)
+  contextLength Int      @map("context_length")
+  inputPrice    Decimal  @default(0) @map("input_price") @db.Decimal(10, 6)
+  outputPrice   Decimal  @default(0) @map("output_price") @db.Decimal(10, 6)
+  capabilities  Json     @default("[]")
+  isActive      Boolean  @default(true) @map("is_active")
+  mcpConfig     Json     @default("{}") @map("mcp_config")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  messages     Message[]
+  modelConfigs ModelConfig[]
+  usageStats   UsageStats[]
+
+  @@unique([provider, name])
+  @@index([provider])
+  @@index([isActive])
+  @@map("models")
+}
+
+/// 用户模型配置表
+model ModelConfig {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  modelId      String   @map("model_id")
+  temperature  Decimal  @default(0.7) @db.Decimal(3, 2)
+  maxTokens    Int      @default(2048) @map("max_tokens")
+  topP         Decimal  @default(1.0) @map("top_p") @db.Decimal(3, 2)
+  systemPrompt String?  @map("system_prompt")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model Model @relation(fields: [modelId], references: [id])
+
+  @@unique([userId, modelId])
+  @@map("model_configs")
+}
+
+// ==================== API密钥相关 ====================
+
+/// 用户API密钥表
+model ApiKey {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  provider      String    @db.VarChar(50)
+  encryptedKey  String    @map("encrypted_key")
+  keyHint       String?   @map("key_hint") @db.VarChar(20)
+  baseUrl       String?   @map("base_url") @db.VarChar(500)
+  isValid       Boolean   @default(true) @map("is_valid")
+  lastValidated DateTime? @map("last_validated")
+  lastUsedAt    DateTime? @map("last_used_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("api_keys")
+}
+
+// ==================== 统计相关 ====================
+
+/// 使用统计表（按日聚合）
+model UsageStats {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  modelId      String   @map("model_id")
+  statDate     DateTime @map("stat_date") @db.Date
+  tokensInput  BigInt   @default(0) @map("tokens_input")
+  tokensOutput BigInt   @default(0) @map("tokens_output")
+  requestCount Int      @default(0) @map("request_count")
+  costUsd      Decimal  @default(0) @map("cost_usd") @db.Decimal(10, 4)
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  model Model @relation(fields: [modelId], references: [id])
+
+  @@unique([userId, modelId, statDate])
+  @@index([userId, statDate(sort: Desc)])
+  @@map("usage_stats")
+}
+
+// ==================== 反馈相关 ====================
+
+/// 消息反馈表
+model Feedback {
+  id        String   @id @default(uuid())
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  rating    Int      @db.SmallInt // -1: 差, 1: 好
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("feedbacks")
+}
+
+// ==================== 审计日志 ====================
+
+/// 审计日志表
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String?  @map("user_id")
+  action       String   @db.VarChar(50)
+  resourceType String?  @map("resource_type") @db.VarChar(50)
+  resourceId   String?  @map("resource_id")
+  details      Json     @default("{}")
+  ipAddress    String?  @map("ip_address") @db.VarChar(45)
+  userAgent    String?  @map("user_agent")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
