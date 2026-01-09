@@ -1,13 +1,14 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bot, Menu } from 'lucide-react'
-import { Sidebar, MessageList, ChatInput, ModelSelector, ShareDialog, type UploadedImage } from '@/components/chat'
+import { Sidebar, MessageList, ChatInput, ModelSelector, ModelConfigDialog, ShareDialog, type UploadedImage } from '@/components/chat'
 import { type UploadedFile } from '@/components/chat/FileUpload'
 import { Button } from '@/components/ui/button'
 import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
 import { sessionApi, chatApi, authApi } from '@/api'
 import { getApiKeys } from '@/api/key'
+import { buildSessionTitle } from '@/lib/utils'
 import type { Session, Message, ApiKey } from '@ai-chat-hub/shared'
 
 export default function ChatPage() {
@@ -171,7 +172,7 @@ export default function ChatPage() {
     // 如果没有当前会话，先创建
     if (!sessionId) {
       try {
-        const session = await sessionApi.create({ title: content.slice(0, 50) })
+        const session = await sessionApi.create({ title: buildSessionTitle(content) })
         addSession(session)
         setCurrentSession(session)
         sessionId = session.id
@@ -286,6 +287,62 @@ export default function ChatPage() {
     }
   }, [])
 
+  // 重新生成消息
+  const handleRegenerate = useCallback(async (messageId: string) => {
+    if (!currentModelId || isSending) return
+
+    // 创建新的助手消息占位
+    const newMessageId = `temp-regenerate-${Date.now()}`
+    const newMessage: Message & { isStreaming: boolean; streamContent: string } = {
+      id: newMessageId,
+      sessionId: currentSession?.id || '',
+      parentId: messageId,
+      role: 'assistant',
+      content: '',
+      modelId: currentModelId,
+      tokensInput: 0,
+      tokensOutput: 0,
+      version: 1,
+      createdAt: new Date(),
+      metadata: {},
+      isStreaming: true,
+      streamContent: '',
+    }
+    addMessage(newMessage)
+    setSending(true)
+
+    // 发送重新生成请求
+    abortControllerRef.current = chatApi.regenerateMessage(
+      messageId,
+      currentModelId,
+      (chunk) => {
+        appendToMessage(newMessageId, chunk)
+      },
+      (finalMessageId, usage) => {
+        finishStreamingMessage(newMessageId, finalMessageId, usage)
+        setSending(false)
+        abortControllerRef.current = null
+      },
+      (error) => {
+        updateMessage(newMessageId, {
+          isStreaming: false,
+          content: `错误: ${error}`,
+        } as any)
+        setSending(false)
+        abortControllerRef.current = null
+      }
+    )
+  }, [currentSession, currentModelId, isSending])
+
+  // 消息反馈
+  const handleFeedback = useCallback(async (messageId: string, rating: -1 | 1) => {
+    try {
+      await chatApi.submitFeedback(messageId, rating)
+    } catch (error) {
+      console.error('提交反馈失败:', error)
+    }
+  }, [])
+
   // 模型切换
   const handleModelChange = useCallback((modelId: string) => {
     setCurrentModelId(modelId)
@@ -350,12 +407,19 @@ export default function ChatPage() {
               </h1>
             </div>
           </div>
-          <ModelSelector
-            models={availableModels}
-            selectedModelId={currentModelId}
-            onModelChange={handleModelChange}
-            disabled={isSending}
-          />
+          <div className="flex items-center gap-2">
+            <ModelSelector
+              models={availableModels}
+              selectedModelId={currentModelId}
+              onModelChange={handleModelChange}
+              disabled={isSending}
+            />
+            <ModelConfigDialog
+              modelId={currentModelId}
+              modelName={currentModel?.displayName}
+              disabled={isSending}
+            />
+          </div>
         </header>
 
         {/* Messages Area */}
@@ -363,6 +427,9 @@ export default function ChatPage() {
           <MessageList
             messages={messages as any}
             isLoading={isLoading || isSending}
+            models={models}
+            onRegenerate={handleRegenerate}
+            onFeedback={handleFeedback}
           />
         </div>
 

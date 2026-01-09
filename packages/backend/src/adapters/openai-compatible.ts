@@ -95,7 +95,8 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
     model: string,
     messages: ChatMessage[],
     options: CompletionOptions,
-    onChunk: (chunk: StreamChunk) => void
+    onChunk: (chunk: StreamChunk) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     // 构建消息
     const openaiMessages: OpenAIMessage[] = []
@@ -166,10 +167,11 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
+      signal,
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({}))
+      const error = await response.json().catch(() => ({})) as { error?: { message?: string }; message?: string }
       throw new Error(
         error.error?.message || error.message || `API 错误: ${response.status}`
       )
@@ -186,6 +188,7 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
 
     try {
       while (true) {
+        if (signal?.aborted) break
         const { done, value } = await reader.read()
         if (done) break
 
@@ -310,5 +313,5 @@ export function createOpenAICompatibleAdapter(
     throw new Error(`Base URL is required for provider: ${provider}`)
   }
 
-  return new OpenAICompatibleAdapter(provider, baseUrl, config.models)
+  return new OpenAICompatibleAdapter(provider, baseUrl, [...config.models])
 }

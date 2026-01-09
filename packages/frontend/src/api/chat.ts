@@ -106,4 +106,122 @@ export const chatApi = {
   stopGeneration: async (sessionId: string): Promise<void> => {
     await apiClient.post('/chat/stop', { sessionId })
   },
+
+  /**
+   * 重新生成消息（流式响应）
+   */
+  regenerateMessage: (
+    messageId: string,
+    modelId: string,
+    onChunk: (chunk: string) => void,
+    onDone: (messageId: string, usage?: { promptTokens: number; completionTokens: number }) => void,
+    onError: (error: string) => void
+  ): AbortController => {
+    const controller = new AbortController()
+    const { accessToken } = useAuthStore.getState()
+
+    fetch(`${API_BASE_URL}/chat/regenerate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ messageId, modelId }),
+      signal: controller.signal,
+      mode: 'cors',
+      credentials: 'include',
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error?.message || '请求失败')
+        }
+
+        const reader = response.body?.getReader()
+        if (!reader) throw new Error('无法读取响应流')
+
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6)
+              if (data === '[DONE]') continue
+
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.type === 'content' && parsed.content) {
+                  onChunk(parsed.content)
+                } else if (parsed.type === 'done') {
+                  onDone(parsed.messageId, parsed.usage)
+                } else if (parsed.type === 'error') {
+                  onError(parsed.error || '生成出错')
+                }
+              } catch {
+                // 忽略解析错误
+              }
+            }
+          }
+        }
+      })
+      .catch((error) => {
+        if (error.name !== 'AbortError') {
+          onError(error.message || '请求失败')
+        }
+      })
+
+    return controller
+  },
+
+  /**
+   * 删除消息
+   */
+  deleteMessage: async (messageId: string): Promise<void> => {
+    await apiClient.delete(`/messages/${messageId}`)
+  },
+
+  /**
+   * 提交消息反馈
+   */
+  submitFeedback: async (messageId: string, rating: -1 | 1, comment?: string): Promise<void> => {
+    await apiClient.post(`/messages/${messageId}/feedback`, { rating, comment })
+  },
+
+  /**
+   * 获取模型配置
+   */
+  getModelConfig: async (modelId: string): Promise<{
+    temperature: number
+    maxTokens: number
+    topP: number
+    systemPrompt: string | null
+  }> => {
+    const response = await apiClient.get<ApiResponse<{
+      temperature: number
+      maxTokens: number
+      topP: number
+      systemPrompt: string | null
+    }>>(`/models/${modelId}/config`)
+    return response.data.data!
+  },
+
+  /**
+   * 更新模型配置
+   */
+  updateModelConfig: async (modelId: string, config: {
+    temperature?: number
+    maxTokens?: number
+    topP?: number
+    systemPrompt?: string | null
+  }): Promise<void> => {
+    await apiClient.put(`/models/${modelId}/config`, config)
+  },
 }

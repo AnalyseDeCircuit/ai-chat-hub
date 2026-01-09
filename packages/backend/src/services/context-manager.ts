@@ -46,7 +46,8 @@ export class ContextManagerService {
 
   /**
    * 智能截断消息
-   * 策略：保留最近的消息，删除中间的旧消息
+   * 性能优化的策略：保留第一条用户消息（主要问题）+ 最近的消息
+   * 这样既节省 token，又不会丢失对话背景
    */
   private truncateMessages(
     messages: ChatMessage[],
@@ -63,23 +64,57 @@ export class ContextManagerService {
       }
     }
 
-    // 从最新的消息开始，向前累加
+    // 只有1-2条消息，不需要截断
+    if (messages.length <= 2) {
+      const totalTokens = tokenCounterService.countTokens(messages, model, systemPrompt)
+      return {
+        messages,
+        totalTokens,
+        truncated: false,
+        removedCount: 0,
+      }
+    }
+
     const result: ChatMessage[] = []
     let currentTokens = systemPrompt
       ? tokenCounterService.countTokens([], model, systemPrompt)
       : 0
 
-    // 保留最近的对话（从后往前）
+    // 策略1：找到并保留第一条用户消息（通常包含主要问题/背景）
+    let firstUserMsgIdx = -1
+    for (let i = 0; i < messages.length; i++) {
+      if (messages[i].role === 'user') {
+        firstUserMsgIdx = i
+        break
+      }
+    }
+
+    // 如果找到第一条用户消息，尝试保留它
+    if (firstUserMsgIdx >= 0) {
+      const firstMsg = messages[firstUserMsgIdx]
+      const firstMsgTokens = tokenCounterService.countTokens([firstMsg], model)
+      
+      // 只有在不超过预算时才保留
+      if (currentTokens + firstMsgTokens <= availableTokens) {
+        result.push(firstMsg)
+        currentTokens += firstMsgTokens
+      }
+    }
+
+    // 策略2：保留最近的消息（从后往前）
     for (let i = messages.length - 1; i >= 0; i--) {
+      // 跳过已经添加的第一条用户消息
+      if (firstUserMsgIdx >= 0 && i <= firstUserMsgIdx) {
+        break
+      }
+
       const message = messages[i]
       const messageTokens = tokenCounterService.countTokens([message], model)
 
-      // 检查是否还有空间
       if (currentTokens + messageTokens <= availableTokens) {
-        result.unshift(message) // 添加到开头
+        result.splice(firstUserMsgIdx >= 0 ? 1 : 0, 0, message) // 插入到第一条消息之后
         currentTokens += messageTokens
       } else {
-        // 没有足够的空间，停止添加
         break
       }
     }

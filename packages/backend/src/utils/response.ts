@@ -1,4 +1,4 @@
-import type { ApiResponse, ApiError, PaginationMeta } from '@ai-chat-hub/shared'
+import type { ApiResponse, PaginationMeta } from '@ai-chat-hub/shared'
 import { ErrorCodes, ErrorMessages, HttpStatus } from '@ai-chat-hub/shared'
 import type { FastifyReply } from 'fastify'
 
@@ -22,7 +22,7 @@ export function error(code: string, message?: string, details?: unknown): ApiRes
     error: {
       code,
       message: message || ErrorMessages[code as keyof typeof ErrorMessages] || '未知错误',
-      ...(details && { details }),
+      ...(details !== undefined && details !== null ? { details } : {}),
     },
   }
 }
@@ -33,7 +33,7 @@ export function error(code: string, message?: string, details?: unknown): ApiRes
 export function sendSuccess<T>(
   reply: FastifyReply,
   data: T,
-  statusCode = HttpStatus.OK,
+  statusCode: number = HttpStatus.OK,
   meta?: PaginationMeta
 ) {
   return reply.code(statusCode).send(success(data, meta))
@@ -45,7 +45,7 @@ export function sendSuccess<T>(
 export function sendError(
   reply: FastifyReply,
   code: string,
-  statusCode = HttpStatus.BAD_REQUEST,
+  statusCode: number = HttpStatus.BAD_REQUEST,
   message?: string,
   details?: unknown
 ) {

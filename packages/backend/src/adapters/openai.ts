@@ -71,7 +71,8 @@ export class OpenAIAdapter extends BaseAdapter {
     model: string,
     messages: ChatMessage[],
     options: CompletionOptions,
-    onChunk: (chunk: StreamChunk) => void
+    onChunk: (chunk: StreamChunk) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     // 构建消息
     const openaiMessages: OpenAIMessage[] = []
@@ -136,10 +137,11 @@ export class OpenAIAdapter extends BaseAdapter {
         stream: true,
         stream_options: { include_usage: true },
       }),
+      signal, // 传递 AbortSignal
     })
 
     if (!response.ok) {
-      const error = await response.json()
+      const error = await response.json() as { error?: { message?: string } }
       throw new Error(error.error?.message || `OpenAI API 错误: ${response.status}`)
     }
 
@@ -154,6 +156,11 @@ export class OpenAIAdapter extends BaseAdapter {
 
     try {
       while (true) {
+        // 检查是否被中止
+        if (signal?.aborted) {
+          break
+        }
+        
         const { done, value } = await reader.read()
         if (done) break
 

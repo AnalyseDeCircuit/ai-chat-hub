@@ -18,13 +18,15 @@ export interface ModelAdapter {
 
   /**
    * 发送消息（流式响应）
+   * @param signal - AbortSignal 用于取消请求
    */
   streamCompletion(
     apiKey: string,
     model: string,
     messages: ChatMessage[],
     options: CompletionOptions,
-    onChunk: (chunk: StreamChunk) => void
+    onChunk: (chunk: StreamChunk) => void,
+    signal?: AbortSignal
   ): Promise<void>
 
   /**
@@ -47,7 +49,8 @@ export abstract class BaseAdapter implements ModelAdapter {
     model: string,
     messages: ChatMessage[],
     options: CompletionOptions,
-    onChunk: (chunk: StreamChunk) => void
+    onChunk: (chunk: StreamChunk) => void,
+    signal?: AbortSignal
   ): Promise<void>
 
   /**

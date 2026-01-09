@@ -53,7 +53,8 @@ export class GeminiAdapter extends BaseAdapter {
     model: string,
     messages: ChatMessage[],
     options: CompletionOptions,
-    onChunk: (chunk: StreamChunk) => void
+    onChunk: (chunk: StreamChunk) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     // 转换消息格式
     const contents: GeminiContent[] = []
@@ -119,11 +120,12 @@ export class GeminiAdapter extends BaseAdapter {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
+        signal,
       }
     )
 
     if (!response.ok) {
-      const error = await response.json()
+      const error = await response.json() as { error?: { message?: string } }
       throw new Error(error.error?.message || `Gemini API 错误: ${response.status}`)
     }
 
@@ -139,6 +141,7 @@ export class GeminiAdapter extends BaseAdapter {
 
     try {
       while (true) {
+        if (signal?.aborted) break
         const { done, value } = await reader.read()
         if (done) break
 

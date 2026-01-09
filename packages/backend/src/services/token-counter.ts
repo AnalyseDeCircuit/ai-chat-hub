@@ -49,15 +49,12 @@ export class TokenCounterService {
     systemPrompt?: string
   ): number {
     let tokensPerMessage = 3
-    let tokensPerName = 1
 
     // 不同模型的开销不同
     if (model.includes('gpt-3.5-turbo')) {
       tokensPerMessage = 4
-      tokensPerName = -1
     } else if (model.includes('gpt-4')) {
       tokensPerMessage = 3
-      tokensPerName = 1
     }
 
     let numTokens = 0

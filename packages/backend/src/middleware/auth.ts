@@ -1,4 +1,4 @@
-import { FastifyRequest, FastifyReply, HookHandlerDoneFunction } from 'fastify'
+import { FastifyRequest, FastifyReply } from 'fastify'
 import { sendUnauthorized } from '../utils/response.js'
 
 /**

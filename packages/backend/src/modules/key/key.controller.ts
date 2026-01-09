@@ -76,14 +76,14 @@ const keyController: FastifyPluginAsync = async (fastify) => {
                   isActive: true,
                 },
               })
-            } catch (error) {
-              fastify.log.error(`Failed to upsert model ${model.id}:`, error)
+            } catch (err) {
+              fastify.log.error({ err, modelId: model.id }, 'Failed to upsert model')
             }
           }
           fastify.log.info(`Detected ${detectedModels.length} models for ${input.provider}`)
         })
-        .catch((error) => {
-          fastify.log.error(`Failed to detect models for ${input.provider}:`, error)
+        .catch((err) => {
+          fastify.log.error({ err, provider: input.provider }, 'Failed to detect models')
         })
 
       // 记录审计日志

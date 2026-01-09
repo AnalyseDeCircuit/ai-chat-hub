@@ -27,7 +27,7 @@ for (const provider of Object.keys(OPENAI_COMPATIBLE_PROVIDERS)) {
   if (provider !== 'custom' && provider !== 'azure') {
     const config = OPENAI_COMPATIBLE_PROVIDERS[provider as keyof typeof OPENAI_COMPATIBLE_PROVIDERS]
     if (config.baseUrl) {
-      adapters.set(provider, new OpenAICompatibleAdapter(provider, config.baseUrl, config.models))
+      adapters.set(provider, new OpenAICompatibleAdapter(provider, config.baseUrl, [...config.models]))
     }
   }
 }

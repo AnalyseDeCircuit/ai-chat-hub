@@ -180,7 +180,7 @@ export class AuthService {
     const accessToken = jwt.sign(
       { userId, email } as Omit<JwtPayload, 'iat' | 'exp'>,
       this.config.JWT_SECRET,
-      { expiresIn: this.config.JWT_EXPIRES_IN }
+      { expiresIn: this.config.JWT_EXPIRES_IN as string }
     )
 
     // 生成刷新令牌

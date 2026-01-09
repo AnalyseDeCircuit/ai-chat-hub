@@ -2,6 +2,7 @@ import Fastify, { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
+import compress from '@fastify/compress'
 import { env } from './config/env.js'
 import configPlugin from './plugins/config.js'
 import prismaPlugin from './plugins/prisma.js'
@@ -34,6 +35,13 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // 注册配置插件
   await app.register(configPlugin)
+
+  // 注册 gzip 压缩（性能优化：减少流式响应体积）
+  await app.register(compress, {
+    global: true,
+    threshold: 1024, // 仅压缩 > 1KB 的响应
+    encodings: ['gzip', 'deflate'],
+  })
 
   // 注册安全相关插件
   await app.register(helmet, {
@@ -102,7 +110,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   )
 
   // 全局错误处理
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error, _request, reply) => {
     app.log.error(error)
 
     // Zod 验证错误

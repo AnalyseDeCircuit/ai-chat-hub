@@ -164,7 +164,7 @@ async function detectOpenAICompatibleModels(
       throw new Error(`HTTP ${response.status}`)
     }
 
-    const data = await response.json()
+    const data = await response.json() as { data?: Array<{ id: string; created?: number }> }
     
     // OpenAI API 返回格式: { data: [ { id, created, ... } ] }
     if (!data.data || !Array.isArray(data.data)) {
@@ -172,7 +172,7 @@ async function detectOpenAICompatibleModels(
     }
 
     return data.data
-      .filter((model: any) => {
+      .filter((model) => {
         // 过滤掉非聊天模型（如 embedding, whisper 等）
         const id = model.id.toLowerCase()
         return (
@@ -183,7 +183,7 @@ async function detectOpenAICompatibleModels(
           id.includes('moonshot')
         )
       })
-      .map((model: any) => {
+      .map((model) => {
         const modelId = model.id
         let contextLength = 4096 // 默认值
 

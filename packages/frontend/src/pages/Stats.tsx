@@ -37,19 +37,30 @@ export default function StatsPage() {
   }
 
   const formatNumber = (num: string | number) => {
-    const n = typeof num === 'string' ? parseInt(num) : num
+    const n = typeof num === 'string' ? parseInt(num) || 0 : num
     return n.toLocaleString()
+  }
+
+  const safeParseInt = (val: string | number): number => {
+    if (typeof val === 'number') return val
+    const parsed = parseInt(val)
+    return isNaN(parsed) ? 0 : parsed
   }
 
   const formatCost = (cost: number) => {
     return `$${cost.toFixed(4)}`
   }
 
-  const maxCostInTrend = Math.max(...dailyTrend.map((d) => d.costUsd), 1)
-  const maxTokensInTrend = Math.max(
-    ...dailyTrend.map((d) => parseInt(d.tokensInput) + parseInt(d.tokensOutput)),
-    1
-  )
+  const maxCostInTrend = dailyTrend.length > 0 
+    ? Math.max(...dailyTrend.map((d) => d.costUsd), 0.0001)
+    : 1
+
+  const maxTokensInTrend = dailyTrend.length > 0
+    ? Math.max(
+        ...dailyTrend.map((d) => safeParseInt(d.tokensInput) + safeParseInt(d.tokensOutput)),
+        1
+      )
+    : 1
 
   if (loading) {
     return (
@@ -63,7 +74,7 @@ export default function StatsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen overflow-y-auto bg-background">
       {/* Header */}
       <header className="sticky top-0 z-10 border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between">
@@ -100,7 +111,9 @@ export default function StatsPage() {
               <Zap className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatNumber(overview?.totalTokens || '0')}</div>
+              <div className="text-2xl font-bold">
+                {overview ? formatNumber(safeParseInt(overview.totalTokens)) : '0'}
+              </div>
               <p className="text-xs text-muted-foreground mt-1">累计使用量</p>
             </CardContent>
           </Card>
@@ -111,7 +124,9 @@ export default function StatsPage() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatNumber(overview?.totalRequests || 0)}</div>
+              <div className="text-2xl font-bold">
+                {overview ? formatNumber(overview.totalRequests) : '0'}
+              </div>
               <p className="text-xs text-muted-foreground mt-1">API 调用次数</p>
             </CardContent>
           </Card>
@@ -122,7 +137,9 @@ export default function StatsPage() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCost(overview?.totalCost || 0)}</div>
+              <div className="text-2xl font-bold">
+                {overview ? formatCost(overview.totalCost) : '$0.0000'}
+              </div>
               <p className="text-xs text-muted-foreground mt-1">美元 (USD)</p>
             </CardContent>
           </Card>
@@ -149,8 +166,8 @@ export default function StatsPage() {
             {dailyTrend.length > 0 ? (
               <div className="space-y-2">
                 {dailyTrend.map((day) => {
-                  const totalTokens = parseInt(day.tokensInput) + parseInt(day.tokensOutput)
-                  const percentage = (totalTokens / maxTokensInTrend) * 100
+                  const totalTokens = safeParseInt(day.tokensInput) + safeParseInt(day.tokensOutput)
+                  const percentage = maxTokensInTrend > 0 ? (totalTokens / maxTokensInTrend) * 100 : 0
                   return (
                     <div key={day.date} className="space-y-1">
                       <div className="flex justify-between text-sm">
@@ -183,7 +200,7 @@ export default function StatsPage() {
             {dailyTrend.length > 0 ? (
               <div className="space-y-2">
                 {dailyTrend.map((day) => {
-                  const percentage = (day.costUsd / maxCostInTrend) * 100
+                  const percentage = maxCostInTrend > 0 ? (day.costUsd / maxCostInTrend) * 100 : 0
                   return (
                     <div key={day.date} className="space-y-1">
                       <div className="flex justify-between text-sm">
@@ -229,8 +246,8 @@ export default function StatsPage() {
                         />
                       </div>
                       <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{formatNumber(model.tokensInput)} 输入</span>
-                        <span>{formatNumber(model.tokensOutput)} 输出</span>
+                        <span>{formatNumber(safeParseInt(model.tokensInput))} 输入</span>
+                        <span>{formatNumber(safeParseInt(model.tokensOutput))} 输出</span>
                         <span>{formatCost(model.costUsd)}</span>
                       </div>
                     </div>
@@ -263,7 +280,7 @@ export default function StatsPage() {
                         <div>
                           <div className="font-medium">{model.displayName}</div>
                           <div className="text-xs text-muted-foreground">
-                            {formatNumber(model.totalTokens)} tokens · {model.requestCount} 次
+                            {formatNumber(safeParseInt(model.totalTokens))} tokens · {model.requestCount} 次
                           </div>
                         </div>
                       </div>

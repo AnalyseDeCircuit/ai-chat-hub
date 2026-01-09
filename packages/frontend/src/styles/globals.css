@@ -1,3 +1,5 @@
+@import './fonts.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -190,6 +192,13 @@
   /* 玻璃拟态工具类 */
   .glass {
     @apply bg-background/60 backdrop-blur-md border border-border/50;
+  }
+
+  /* 代码字体 - 确保所有代码使用 JetBrains Mono */
+  code, pre, .font-mono, 
+  [class*="language-"],
+  .prism-code {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace !important;
   }
 
   /* 隐藏滚动条但保留功能 */

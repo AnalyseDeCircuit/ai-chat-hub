@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, CheckCircle, XCircle, RefreshCw, Key } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Trash2, CheckCircle, XCircle, RefreshCw, Key, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -39,6 +40,7 @@ const PROVIDERS: {
 ]
 
 export default function ApiKeys() {
+  const navigate = useNavigate()
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -165,11 +167,24 @@ export default function ApiKeys() {
 
   return (
     <div className="container max-w-4xl mx-auto py-8">
+      {/* Header with back button */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">API 密钥管理</h1>
-        <p className="text-muted-foreground">
-          管理您的 AI 模型 API 密钥。密钥将使用 AES-256 加密存储。
-        </p>
+        <div className="flex items-center gap-4 mb-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate('/')}
+            className="rounded-lg"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold mb-2">API 密钥管理</h1>
+            <p className="text-muted-foreground">
+              管理您的 AI 模型 API 密钥。密钥将使用 AES-256 加密存储。
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* 已保存的密钥列表 */}

@@ -91,4 +91,34 @@ export const sessionApi = {
     const response = await apiClient.get<ApiResponse<Session>>(`/sessions/shared/${shareCode}`)
     return response.data.data!
   },
+
+  /**
+   * 导出会话为 Markdown
+   */
+  exportMarkdown: async (sessionId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/sessions/${sessionId}/export/markdown`, {
+      responseType: 'blob',
+    })
+    return response.data as Blob
+  },
+
+  /**
+   * 导出会话为 JSON
+   */
+  exportJson: async (sessionId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/sessions/${sessionId}/export/json`, {
+      responseType: 'blob',
+    })
+    return response.data as Blob
+  },
+
+  /**
+   * 导出会话为纯文本
+   */
+  exportText: async (sessionId: string): Promise<Blob> => {
+    const response = await apiClient.get(`/sessions/${sessionId}/export/text`, {
+      responseType: 'blob',
+    })
+    return response.data as Blob
+  },
 }

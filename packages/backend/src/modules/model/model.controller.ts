@@ -26,7 +26,7 @@ const modelController: FastifyPluginAsync = async (fastify) => {
   /**
    * GET /providers - 获取支持的提供商
    */
-  fastify.get('/providers', async (request, reply) => {
+  fastify.get('/providers', async (_request, reply) => {
     const providers = await fastify.prisma.model.groupBy({
       by: ['provider'],
       where: { isActive: true },

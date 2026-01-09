@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { 
   Plus, MessageSquare, Archive, LogOut, ChevronLeft, 
   Search, Trash2, Key, Bot, BarChart3, Share2, ArchiveRestore,
-  MoreHorizontal
+  MoreHorizontal, User, Download, FileText, FileJson, FileType
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -15,11 +15,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
+import { sessionApi } from '@/api'
 import type { Session } from '@ai-chat-hub/shared'
 
 interface SidebarProps {
@@ -46,6 +50,43 @@ export function Sidebar({
   const { sessions, currentSession, sidebarOpen, toggleSidebar } = useChatStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [showArchived, setShowArchived] = useState(false)
+
+  // 导出会话
+  const handleExportSession = async (sessionId: string, format: 'markdown' | 'json' | 'text') => {
+    try {
+      let blob: Blob
+      let filename: string
+      const session = sessions.find(s => s.id === sessionId)
+      const title = session?.title || 'chat'
+      
+      switch (format) {
+        case 'markdown':
+          blob = await sessionApi.exportMarkdown(sessionId)
+          filename = `${title}.md`
+          break
+        case 'json':
+          blob = await sessionApi.exportJson(sessionId)
+          filename = `${title}.json`
+          break
+        case 'text':
+          blob = await sessionApi.exportText(sessionId)
+          filename = `${title}.txt`
+          break
+      }
+      
+      // 创建下载链接
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('导出失败:', error)
+    }
+  }
 
   // 过滤和分组会话
   const groupedSessions = useMemo(() => {
@@ -181,6 +222,7 @@ export function Sidebar({
                       : onArchiveSession(session.id)
                     }
                     onDelete={() => onDeleteSession(session.id)}
+                    onExport={(format) => handleExportSession(session.id, format)}
                   />
                 ))}
               </div>
@@ -226,6 +268,15 @@ export function Sidebar({
             <Key className="w-4 h-4" />
             <span className="text-sm">API 密钥</span>
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full h-9 justify-start gap-2 px-3 rounded-lg text-muted-foreground hover:text-foreground"
+            onClick={() => navigate('/profile')}
+          >
+            <User className="w-4 h-4" />
+            <span className="text-sm">个人信息</span>
+          </Button>
           <ThemeSwitcher />
         </div>
 
@@ -265,67 +316,100 @@ interface SessionItemProps {
   onShare: () => void
   onArchive: () => void
   onDelete: () => void
+  onExport: (format: 'markdown' | 'json' | 'text') => void
 }
 
-function SessionItem({ session, isActive, onSelect, onShare, onArchive, onDelete }: SessionItemProps) {
+function SessionItem({ session, isActive, onSelect, onShare, onArchive, onDelete, onExport }: SessionItemProps) {
   return (
     <div
       className={cn(
-        'group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors',
+        'flex py-2 px-2 items-center gap-3 relative rounded-md cursor-pointer transition-opacity',
         isActive
-          ? 'bg-accent text-foreground'
-          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+          ? 'bg-accent pr-14'
+          : 'hover:bg-accent/50'
       )}
       onClick={onSelect}
     >
+      {/* 图标 */}
       <MessageSquare className={cn(
         "w-4 h-4 flex-shrink-0",
         isActive ? "text-primary" : "text-muted-foreground/50"
       )} />
-      <span className="flex-1 truncate text-sm">
-        {session.title || '新对话'}
-      </span>
       
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="w-7 h-7 rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            <MoreHorizontal className="w-4 h-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
-          {!session.archivedAt && (
-            <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onShare(); }}>
-              <Share2 className="w-4 h-4 mr-2" />
-              分享
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onArchive(); }}>
-            {session.archivedAt ? (
-              <>
-                <ArchiveRestore className="w-4 h-4 mr-2" />
-                取消归档
-              </>
-            ) : (
-              <>
-                <Archive className="w-4 h-4 mr-2" />
-                归档
-              </>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem 
-            onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDelete(); }}
-            className="text-destructive focus:text-destructive"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            删除
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* 标题 - 使用 text-ellipsis + max-h-5 + overflow-hidden */}
+      <div className="flex-1 text-ellipsis max-h-5 overflow-hidden break-all relative text-sm" title={session.title || '新对话'}>
+        {session.title || '新对话'}
+        
+        {/* 渐变遮罩 - 右侧渐隐效果 */}
+        <div className={cn(
+          "absolute inset-y-0 right-0 w-8 z-10 bg-gradient-to-l pointer-events-none",
+          isActive 
+            ? "from-accent" 
+            : "from-secondary/30 group-hover:from-accent/50"
+        )} />
+      </div>
+      
+      {/* 操作按钮 - 只在选中时显示 */}
+      {isActive && (
+        <div className="absolute flex right-1 z-10 text-muted-foreground">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+              <button className="p-1 hover:text-foreground rounded" aria-label="更多操作">
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {!session.archivedAt && (
+                <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onShare(); }}>
+                  <Share2 className="w-4 h-4 mr-2" />
+                  分享
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                  <Download className="w-4 h-4 mr-2" />
+                  导出
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onExport('markdown'); }}>
+                    <FileText className="w-4 h-4 mr-2" />
+                    Markdown (.md)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onExport('json'); }}>
+                    <FileJson className="w-4 h-4 mr-2" />
+                    JSON (.json)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onExport('text'); }}>
+                    <FileType className="w-4 h-4 mr-2" />
+                    纯文本 (.txt)
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuItem onClick={(e: React.MouseEvent) => { e.stopPropagation(); onArchive(); }}>
+                {session.archivedAt ? (
+                  <>
+                    <ArchiveRestore className="w-4 h-4 mr-2" />
+                    取消归档
+                  </>
+                ) : (
+                  <>
+                    <Archive className="w-4 h-4 mr-2" />
+                    归档
+                  </>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={(e: React.MouseEvent) => { e.stopPropagation(); onDelete(); }}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                删除
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </div>
   )
 }

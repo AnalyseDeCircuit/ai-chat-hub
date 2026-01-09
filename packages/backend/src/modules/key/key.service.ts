@@ -74,8 +74,8 @@ export class KeyService {
       },
     })
 
-    // 清除明文密钥
-    this.encryption.secureWipe(apiKey)
+    // 注意：JavaScript 字符串是不可变的，无法真正安全清除
+    // 密钥已加密存储，明文仅在内存中短暂存在
 
     return record
   }
@@ -130,8 +130,8 @@ export class KeyService {
       },
     })
 
-    // 清除明文密钥
-    this.encryption.secureWipe(apiKey)
+    // 注意：JavaScript 字符串是不可变的，无法真正安全清除
+    // 密钥已加密存储，明文仅在内存中短暂存在
 
     return isValid
   }

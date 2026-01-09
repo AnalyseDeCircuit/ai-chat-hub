@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify'
-import { sendSuccess, sendError } from '../../utils/response.js'
+import { sendError } from '../../utils/response.js'
 import { HttpStatus, ErrorCodes } from '@ai-chat-hub/shared'
 import { authMiddleware, requireUserId } from '../../middleware/auth.js'
 

@@ -85,7 +85,8 @@ export class ClaudeAdapter extends BaseAdapter {
     model: string,
     messages: ChatMessage[],
     options: CompletionOptions,
-    onChunk: (chunk: StreamChunk) => void
+    onChunk: (chunk: StreamChunk) => void,
+    signal?: AbortSignal
   ): Promise<void> {
     // 转换消息格式
     const claudeMessages: ClaudeMessage[] = []
@@ -169,10 +170,11 @@ export class ClaudeAdapter extends BaseAdapter {
         'anthropic-version': this.apiVersion,
       },
       body: JSON.stringify(requestBody),
+      signal,
     })
 
     if (!response.ok) {
-      const error = await response.json()
+      const error = await response.json() as { error?: { message?: string } }
       throw new Error(
         error.error?.message || `Claude API 错误: ${response.status}`
       )
@@ -190,6 +192,10 @@ export class ClaudeAdapter extends BaseAdapter {
 
     try {
       while (true) {
+        if (signal?.aborted) {
+          break
+        }
+        
         const { done, value } = await reader.read()
         if (done) break
 
