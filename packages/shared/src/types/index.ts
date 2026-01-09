@@ -117,6 +117,13 @@ export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'deepseek' | 'zh
 
 export type ModelCapability = 'chat' | 'vision' | 'function_call' | 'code'
 
+export interface VisionCapabilities {
+  supportsVision: boolean
+  maxImages?: number
+  supportedFormats?: string[]
+  maxImageSize?: number
+}
+
 export interface Model {
   id: string
   provider: ModelProvider
@@ -125,7 +132,7 @@ export interface Model {
   contextLength: number
   inputPrice: number
   outputPrice: number
-  capabilities: ModelCapability[]
+  capabilities: VisionCapabilities | Record<string, any> // 动态能力配置
   isActive: boolean
   mcpConfig: McpConfig
   createdAt: Date
@@ -250,6 +257,17 @@ export interface ChatCompletionInput {
 export interface ChatMessage {
   role: MessageRole
   content: string
+  images?: Array<{
+    base64Data: string
+    mimeType: string
+  }>
+  files?: Array<{
+    fileName: string
+    fileType: string
+    mimeType: string
+    base64Data: string
+    fileSize: number
+  }>
 }
 
 export interface StreamChunk {

@@ -97,11 +97,12 @@ model Message {
   createdAt    DateTime    @default(now()) @map("created_at")
   metadata     Json        @default("{}")
 
-  session   Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  parent    Message?   @relation("MessageVersions", fields: [parentId], references: [id])
-  children  Message[]  @relation("MessageVersions")
-  model     Model?     @relation(fields: [modelId], references: [id])
-  feedbacks Feedback[]
+  session     Session             @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  parent      Message?            @relation("MessageVersions", fields: [parentId], references: [id])
+  children    Message[]           @relation("MessageVersions")
+  model       Model?              @relation(fields: [modelId], references: [id])
+  feedbacks   Feedback[]
+  attachments MessageAttachment[]
 
   @@index([sessionId])
   @@index([createdAt])
@@ -115,6 +116,26 @@ enum MessageRole {
   system
 }
 
+/// 消息附件表（图片、文件等）
+model MessageAttachment {
+  id         String   @id @default(uuid())
+  messageId  String   @map("message_id")
+  type       String   @db.VarChar(20) // 'image', 'file'
+  fileName   String   @map("file_name") @db.VarChar(255)
+  mimeType   String   @map("mime_type") @db.VarChar(100)
+  size       Int // 文件大小（字节）
+  base64Data String?  @map("base64_data") @db.Text // Base64编码数据（小文件）
+  storageUrl String?  @map("storage_url") @db.VarChar(1000) // 对象存储URL（大文件）
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([type])
+  @@map("message_attachments")
+}
+
 // ==================== 模型相关 ====================
 
 /// AI模型表
@@ -126,7 +147,7 @@ model Model {
   contextLength Int      @map("context_length")
   inputPrice    Decimal  @default(0) @map("input_price") @db.Decimal(10, 6)
   outputPrice   Decimal  @default(0) @map("output_price") @db.Decimal(10, 6)
-  capabilities  Json     @default("[]")
+  capabilities  Json     @default("{}")
   isActive      Boolean  @default(true) @map("is_active")
   mcpConfig     Json     @default("{}") @map("mcp_config")
   createdAt     DateTime @default(now()) @map("created_at")

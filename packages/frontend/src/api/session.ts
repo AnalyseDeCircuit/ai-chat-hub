@@ -58,4 +58,37 @@ export const sessionApi = {
     const response = await apiClient.post<ApiResponse<Session>>(`/sessions/${id}/archive`)
     return response.data.data!
   },
+
+  /**
+   * 取消归档
+   */
+  unarchive: async (id: string): Promise<Session> => {
+    const response = await apiClient.post<ApiResponse<Session>>(`/sessions/${id}/unarchive`)
+    return response.data.data!
+  },
+
+  /**
+   * 分享会话
+   */
+  share: async (id: string): Promise<{ shareCode: string; shareUrl: string }> => {
+    const response = await apiClient.post<ApiResponse<{ shareCode: string; shareUrl: string }>>(
+      `/sessions/${id}/share`
+    )
+    return response.data.data!
+  },
+
+  /**
+   * 取消分享
+   */
+  unshare: async (id: string): Promise<void> => {
+    await apiClient.post(`/sessions/${id}/unshare`)
+  },
+
+  /**
+   * 通过分享码获取会话
+   */
+  getByShareCode: async (shareCode: string): Promise<Session> => {
+    const response = await apiClient.get<ApiResponse<Session>>(`/sessions/shared/${shareCode}`)
+    return response.data.data!
+  },
 }

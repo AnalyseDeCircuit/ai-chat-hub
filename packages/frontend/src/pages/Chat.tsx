@@ -1,7 +1,8 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bot } from 'lucide-react'
-import { Sidebar, MessageList, ChatInput, ModelSelector } from '@/components/chat'
+import { Sidebar, MessageList, ChatInput, ModelSelector, ShareDialog, type UploadedImage } from '@/components/chat'
+import { FileUpload, type UploadedFile } from '@/components/chat/FileUpload'
 import { Button } from '@/components/ui/button'
 import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
@@ -13,6 +14,7 @@ export default function ChatPage() {
   const navigate = useNavigate()
   const abortControllerRef = useRef<AbortController | null>(null)
   const [userKeys, setUserKeys] = useState<ApiKey[]>([])
+  const [shareDialogUrl, setShareDialogUrl] = useState<string | null>(null)
   
   const { user, logout: authLogout, refreshToken } = useAuthStore()
   const {
@@ -62,6 +64,10 @@ export default function ChatPage() {
   const availableModels = models.filter((model) => {
     return userKeys.some((key) => key.provider === model.provider)
   })
+
+  // 获取当前模型的 Vision 能力
+  const currentModel = availableModels.find(m => m.id === currentModelId)
+  const visionCapabilities = currentModel?.capabilities as any
 
   // 当可用模型列表变化时，确保选择了有效模型
   useEffect(() => {
@@ -122,8 +128,47 @@ export default function ChatPage() {
     }
   }, [currentSession])
 
+  // 归档会话
+  const handleArchiveSession = useCallback(async (sessionId: string) => {
+    try {
+      const updatedSession = await sessionApi.archive(sessionId)
+      // 更新会话列表
+      setSessions(sessions.map(s => s.id === sessionId ? updatedSession : s))
+      // 如果归档的是当前会话，清空当前会话
+      if (currentSession?.id === sessionId) {
+        setCurrentSession(null)
+      }
+    } catch (error) {
+      console.error('归档会话失败:', error)
+      alert('归档失败')
+    }
+  }, [sessions, currentSession])
+
+  // 取消归档
+  const handleUnarchiveSession = useCallback(async (sessionId: string) => {
+    try {
+      const updatedSession = await sessionApi.unarchive(sessionId)
+      // 更新会话列表
+      setSessions(sessions.map(s => s.id === sessionId ? updatedSession : s))
+    } catch (error) {
+      console.error('取消归档失败:', error)
+      alert('取消归档失败')
+    }
+  }, [sessions])
+
+  // 分享会话
+  const handleShareSession = useCallback(async (sessionId: string) => {
+    try {
+      const { shareUrl } = await sessionApi.share(sessionId)
+      setShareDialogUrl(shareUrl)
+    } catch (error) {
+      console.error('分享失败:', error)
+      alert('分享失败')
+    }
+  }, [])
+
   // 发送消息
-  const handleSendMessage = useCallback(async (content: string) => {
+  const handleSendMessage = useCallback(async (content: string, images?: UploadedImage[], files?: UploadedFile[]) => {
     if (!currentModelId) {
       alert('请先选择模型')
       return
@@ -180,6 +225,40 @@ export default function ChatPage() {
     addMessage(assistantMessage)
     setSending(true)
 
+    // 转换图片格式
+    const imageData = images?.map(img => ({
+      base64: img.base64,
+      mimeType: img.mimeType,
+    }))
+
+    // 转换文件格式
+    const fileData = files?.map(file => ({
+      fileName: file.fileName,
+      fileType: file.fileType,
+      mimeType: file.mimeType,
+      base64Data: '', // 需要从文件读取
+      fileSize: file.file.size,
+    }))
+
+    // 如果有文件，需要读取 base64
+    if (files && files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const reader = new FileReader()
+        await new Promise<void>((resolve) => {
+          reader.onload = (e) => {
+            const result = e.target?.result as string
+            const base64 = result.split(',')[1]
+            if (fileData && fileData[i]) {
+              fileData[i].base64Data = base64
+            }
+            resolve()
+          }
+          reader.readAsDataURL(file.file)
+        })
+      }
+    }
+
     // 发送请求
     abortControllerRef.current = chatApi.sendMessage(
       sessionId,
@@ -203,7 +282,11 @@ export default function ChatPage() {
         } as any)
         setSending(false)
         abortControllerRef.current = null
-      }
+      },
+      // images
+      imageData,
+      // files
+      fileData
     )
   }, [currentSession, currentModelId, messages])
 
@@ -239,6 +322,9 @@ export default function ChatPage() {
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
+        onArchiveSession={handleArchiveSession}
+        onUnarchiveSession={handleUnarchiveSession}
+        onShareSession={handleShareSession}
         onLogout={handleLogout}
       />
 
@@ -278,8 +364,14 @@ export default function ChatPage() {
           onSend={handleSendMessage}
           onStop={handleStop}
           isSending={isSending}
+          visionCapabilities={visionCapabilities}
         />
       </div>
+
+      {/* Share Dialog */}
+      {shareDialogUrl && (
+        <ShareDialog shareUrl={shareDialogUrl} onClose={() => setShareDialogUrl(null)} />
+      )}
     </div>
   )
 }

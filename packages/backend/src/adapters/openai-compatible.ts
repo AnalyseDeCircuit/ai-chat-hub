@@ -3,7 +3,14 @@ import type { ChatMessage, StreamChunk } from '@ai-chat-hub/shared'
 
 interface OpenAIMessage {
   role: 'system' | 'user' | 'assistant'
-  content: string
+  content: string | Array<{
+    type: 'text' | 'image_url'
+    text?: string
+    image_url?: {
+      url: string
+      detail?: 'low' | 'high' | 'auto'
+    }
+  }>
 }
 
 interface OpenAIStreamChoice {
@@ -103,10 +110,39 @@ export class OpenAICompatibleAdapter extends BaseAdapter {
 
     // 转换消息格式
     for (const msg of messages) {
-      openaiMessages.push({
-        role: msg.role as 'user' | 'assistant' | 'system',
-        content: msg.content,
-      })
+      // 检查是否有图片（多模态）
+      if (msg.images && msg.images.length > 0) {
+        const contentParts: Array<{ type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }> = []
+        
+        // 添加文本内容
+        if (msg.content) {
+          contentParts.push({
+            type: 'text',
+            text: msg.content,
+          })
+        }
+        
+        // 添加图片
+        for (const img of msg.images) {
+          contentParts.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${img.mimeType};base64,${img.base64Data}`,
+            },
+          })
+        }
+        
+        openaiMessages.push({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: contentParts,
+        })
+      } else {
+        // 纯文本消息
+        openaiMessages.push({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content,
+        })
+      }
     }
 
     const requestBody: any = {

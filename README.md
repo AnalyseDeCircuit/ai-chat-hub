@@ -126,7 +126,7 @@ ai-chat-hub/
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/your-username/ai-chat-hub.git
+git clone https://github.com/AnalyseDeCircuit/ai-chat-hub.git
 cd ai-chat-hub
 
 # 2. 安装依赖

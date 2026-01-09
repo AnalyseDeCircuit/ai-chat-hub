@@ -8,6 +8,7 @@ import LoginPage from '@/pages/Login'
 import RegisterPage from '@/pages/Register'
 import ChatPage from '@/pages/Chat'
 import ApiKeysPage from '@/pages/ApiKeys'
+import StatsPage from '@/pages/Stats'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +53,14 @@ function AppContent() {
         element={
           <ProtectedRoute>
             <ApiKeysPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/stats"
+        element={
+          <ProtectedRoute>
+            <StatsPage />
           </ProtectedRoute>
         }
       />

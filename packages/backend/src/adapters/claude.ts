@@ -3,7 +3,15 @@ import type { ChatMessage, StreamChunk } from '@ai-chat-hub/shared'
 
 interface ClaudeMessage {
   role: 'user' | 'assistant'
-  content: string
+  content: string | Array<{
+    type: 'text' | 'image'
+    text?: string
+    source?: {
+      type: 'base64'
+      media_type: string
+      data: string
+    }
+  }>
 }
 
 interface ClaudeStreamEvent {
@@ -88,10 +96,41 @@ export class ClaudeAdapter extends BaseAdapter {
         // Claude 的 system 不在 messages 中，而是单独的参数
         systemPrompt = (systemPrompt ? systemPrompt + '\n\n' : '') + msg.content
       } else {
-        claudeMessages.push({
-          role: msg.role as 'user' | 'assistant',
-          content: msg.content,
-        })
+        // 检查是否有图片（多模态）
+        if (msg.images && msg.images.length > 0) {
+          const contentParts: Array<{ type: 'text' | 'image'; text?: string; source?: { type: 'base64'; media_type: string; data: string } }> = []
+          
+          // 添加文本内容
+          if (msg.content) {
+            contentParts.push({
+              type: 'text',
+              text: msg.content,
+            })
+          }
+          
+          // 添加图片
+          for (const img of msg.images) {
+            contentParts.push({
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: img.mimeType,
+                data: img.base64Data,
+              },
+            })
+          }
+          
+          claudeMessages.push({
+            role: msg.role as 'user' | 'assistant',
+            content: contentParts,
+          })
+        } else {
+          // 纯文本消息
+          claudeMessages.push({
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+          })
+        }
       }
     }
 

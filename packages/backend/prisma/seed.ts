@@ -15,7 +15,13 @@ async function main() {
       contextLength: 128000,
       inputPrice: 0.005,
       outputPrice: 0.015,
-      capabilities: ['chat', 'vision', 'function_call'],
+      capabilities: {
+        supportsVision: true,
+        maxImages: 10,
+        supportedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        maxImageSize: 20971520, // 20MB
+        supportsFiles: false,
+      },
       isActive: true,
     },
     {
@@ -25,7 +31,13 @@ async function main() {
       contextLength: 128000,
       inputPrice: 0.00015,
       outputPrice: 0.0006,
-      capabilities: ['chat', 'vision', 'function_call'],
+      capabilities: {
+        supportsVision: true,
+        maxImages: 10,
+        supportedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        maxImageSize: 20971520,
+        supportsFiles: false,
+      },
       isActive: true,
     },
     {
@@ -35,7 +47,13 @@ async function main() {
       contextLength: 128000,
       inputPrice: 0.01,
       outputPrice: 0.03,
-      capabilities: ['chat', 'vision', 'function_call'],
+      capabilities: {
+        supportsVision: true,
+        maxImages: 10,
+        supportedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        maxImageSize: 20971520,
+        supportsFiles: false,
+      },
       isActive: true,
     },
     {
@@ -45,7 +63,10 @@ async function main() {
       contextLength: 16385,
       inputPrice: 0.0005,
       outputPrice: 0.0015,
-      capabilities: ['chat', 'function_call'],
+      capabilities: {
+        supportsVision: false,
+        supportsFiles: false,
+      },
       isActive: true,
     },
 
@@ -57,7 +78,13 @@ async function main() {
       contextLength: 200000,
       inputPrice: 0.003,
       outputPrice: 0.015,
-      capabilities: ['chat', 'vision'],
+      capabilities: {
+        supportsVision: true,
+        maxImages: 5,
+        supportedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        maxImageSize: 10485760, // 10MB
+        supportsFiles: false,
+      },
       isActive: true,
     },
     {
@@ -67,7 +94,13 @@ async function main() {
       contextLength: 200000,
       inputPrice: 0.015,
       outputPrice: 0.075,
-      capabilities: ['chat', 'vision'],
+      capabilities: {
+        supportsVision: true,
+        maxImages: 5,
+        supportedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        maxImageSize: 10485760,
+        supportsFiles: false,
+      },
       isActive: true,
     },
     {
@@ -77,7 +110,13 @@ async function main() {
       contextLength: 200000,
       inputPrice: 0.003,
       outputPrice: 0.015,
-      capabilities: ['chat', 'vision'],
+      capabilities: {
+        supportsVision: true,
+        maxImages: 5,
+        supportedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        maxImageSize: 10485760,
+        supportsFiles: false,
+      },
       isActive: true,
     },
     {
@@ -87,7 +126,13 @@ async function main() {
       contextLength: 200000,
       inputPrice: 0.00025,
       outputPrice: 0.00125,
-      capabilities: ['chat', 'vision'],
+      capabilities: {
+        supportsVision: true,
+        maxImages: 5,
+        supportedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        maxImageSize: 10485760,
+        supportsFiles: false,
+      },
       isActive: true,
     },
 
@@ -99,7 +144,14 @@ async function main() {
       contextLength: 1000000,
       inputPrice: 0.00125,
       outputPrice: 0.005,
-      capabilities: ['chat', 'vision'],
+      capabilities: {
+        supportsVision: true,
+        maxImages: 16,
+        supportedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        maxImageSize: 20971520,
+        supportsFiles: true,
+        supportedFileTypes: ['pdf', 'txt'],
+      },
       isActive: true,
     },
     {
@@ -109,7 +161,14 @@ async function main() {
       contextLength: 1000000,
       inputPrice: 0.000075,
       outputPrice: 0.0003,
-      capabilities: ['chat', 'vision'],
+      capabilities: {
+        supportsVision: true,
+        maxImages: 16,
+        supportedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        maxImageSize: 20971520,
+        supportsFiles: true,
+        supportedFileTypes: ['pdf', 'txt'],
+      },
       isActive: true,
     },
   ]

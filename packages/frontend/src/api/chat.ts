@@ -32,7 +32,9 @@ export const chatApi = {
     modelId: string,
     onChunk: (chunk: string) => void,
     onDone: (messageId: string, usage?: { promptTokens: number; completionTokens: number }) => void,
-    onError: (error: string) => void
+    onError: (error: string) => void,
+    images?: Array<{ base64: string; mimeType: string }>,
+    files?: Array<{ fileName: string; fileType: string; mimeType: string; base64Data: string; fileSize: number }>
   ): AbortController => {
     const controller = new AbortController()
     const { accessToken } = useAuthStore.getState()
@@ -43,7 +45,7 @@ export const chatApi = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ sessionId, content, modelId }),
+      body: JSON.stringify({ sessionId, content, modelId, images, files }),
       signal: controller.signal,
       mode: 'cors',
       credentials: 'include',

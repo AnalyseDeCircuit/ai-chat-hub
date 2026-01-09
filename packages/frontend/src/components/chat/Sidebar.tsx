@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, MessageSquare, Archive, Settings, LogOut, ChevronLeft, Search, MoreHorizontal, Trash2, Edit3, Key, Bot } from 'lucide-react'
+import { Plus, MessageSquare, Archive, Settings, LogOut, ChevronLeft, Search, MoreHorizontal, Trash2, Edit3, Key, Bot, BarChart3, Share2, ArchiveRestore } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,20 +16,26 @@ interface SidebarProps {
   onNewChat: () => void
   onSelectSession: (session: Session) => void
   onDeleteSession: (sessionId: string) => void
+  onArchiveSession: (sessionId: string) => void
+  onUnarchiveSession: (sessionId: string) => void
+  onShareSession: (sessionId: string) => void
   onLogout: () => void
 }
 
-export function Sidebar({ onNewChat, onSelectSession, onDeleteSession, onLogout }: SidebarProps) {
+export function Sidebar({ onNewChat, onSelectSession, onDeleteSession, onArchiveSession, onUnarchiveSession, onShareSession, onLogout }: SidebarProps) {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const { sessions, currentSession, sidebarOpen, toggleSidebar } = useChatStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   const filteredSessions = sessions.filter(
-    (session) =>
-      !searchQuery ||
-      session.title?.toLowerCase().includes(searchQuery.toLowerCase())
+    (session) => {
+      const matchesSearch = !searchQuery || session.title?.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesArchived = showArchived ? !!session.archivedAt : !session.archivedAt
+      return matchesSearch && matchesArchived
+    }
   )
 
   // 按日期分组
@@ -166,6 +172,47 @@ export function Sidebar({ onNewChat, onSelectSession, onDeleteSession, onLogout 
                     </span>
                     
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {!session.archivedAt && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="w-7 h-7 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onShareSession(session.id)
+                          }}
+                          title="分享会话"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                      {session.archivedAt ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="w-7 h-7 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onUnarchiveSession(session.id)
+                          }}
+                          title="取消归档"
+                        >
+                          <ArchiveRestore className="w-3.5 h-3.5" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="w-7 h-7 rounded-lg text-muted-foreground hover:text-orange-500 hover:bg-orange-500/10"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onArchiveSession(session.id)
+                          }}
+                          title="归档会话"
+                        >
+                          <Archive className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -174,6 +221,7 @@ export function Sidebar({ onNewChat, onSelectSession, onDeleteSession, onLogout 
                           e.stopPropagation()
                           onDeleteSession(session.id)
                         }}
+                        title="删除会话"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
@@ -189,6 +237,24 @@ export function Sidebar({ onNewChat, onSelectSession, onDeleteSession, onLogout 
       <div className="p-4 mt-auto border-t border-border/40 space-y-4 bg-muted/10 backdrop-blur-sm">
         {/* Actions */}
         <div className="space-y-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full h-10 justify-start gap-3 px-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50"
+            onClick={() => setShowArchived(!showArchived)}
+          >
+            {showArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+            <span className="text-sm font-medium">{showArchived ? '查看活动会话' : '查看归档'}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full h-10 justify-start gap-3 px-3 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50"
+            onClick={() => navigate('/stats')}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span className="text-sm font-medium">使用统计</span>
+          </Button>
           <Button
             variant="ghost"
             size="sm"

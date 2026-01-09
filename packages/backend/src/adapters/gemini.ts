@@ -3,7 +3,13 @@ import type { ChatMessage, StreamChunk } from '@ai-chat-hub/shared'
 
 interface GeminiContent {
   role: string
-  parts: Array<{ text: string }>
+  parts: Array<{ 
+    text?: string
+    inlineData?: {
+      mimeType: string
+      data: string
+    }
+  }>
 }
 
 interface GeminiStreamResponse {
@@ -57,10 +63,36 @@ export class GeminiAdapter extends BaseAdapter {
       if (msg.role === 'system') {
         systemInstruction = (systemInstruction ? systemInstruction + '\n\n' : '') + msg.content
       } else {
-        contents.push({
-          role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: msg.content }],
-        })
+        // 检查是否有图片（多模态）
+        if (msg.images && msg.images.length > 0) {
+          const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = []
+          
+          // 添加文本内容
+          if (msg.content) {
+            parts.push({ text: msg.content })
+          }
+          
+          // 添加图片
+          for (const img of msg.images) {
+            parts.push({
+              inlineData: {
+                mimeType: img.mimeType,
+                data: img.base64Data,
+              },
+            })
+          }
+          
+          contents.push({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts,
+          })
+        } else {
+          // 纯文本消息
+          contents.push({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: msg.content }],
+          })
+        }
       }
     }
 

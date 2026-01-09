@@ -5,16 +5,28 @@ import { HttpStatus, ErrorCodes } from '@ai-chat-hub/shared'
 import type { ChatMessage } from '@ai-chat-hub/shared'
 import { authMiddleware, requireUserId } from '../../middleware/auth.js'
 import { getAdapter } from '../../adapters/index.js'
-import { contextManagerService, tokenCounterService, createUsageStatsService } from '../../services/index.js'
+import { contextManagerService, tokenCounterService, createUsageStatsService, createFileParserService } from '../../services/index.js'
 
 const ChatCompletionSchema = z.object({
   sessionId: z.string().uuid(),
   content: z.string().min(1).max(100000),
   modelId: z.string().uuid(),
+  images: z.array(z.object({
+    base64: z.string(),
+    mimeType: z.string(),
+  })).optional(),
+  files: z.array(z.object({
+    fileName: z.string(),
+    fileType: z.string(),
+    mimeType: z.string(),
+    base64Data: z.string(),
+    fileSize: z.number(),
+  })).optional(),
 })
 
 const chatController: FastifyPluginAsync = async (fastify) => {
   const usageStatsService = createUsageStatsService(fastify.prisma)
+  const fileParserService = createFileParserService()
   
   // 所有路由需要认证
   fastify.addHook('preHandler', authMiddleware)
@@ -32,7 +44,7 @@ const chatController: FastifyPluginAsync = async (fastify) => {
       return sendError(reply, ErrorCodes.VALIDATION_ERROR, HttpStatus.UNPROCESSABLE_ENTITY)
     }
 
-    const { sessionId, content, modelId } = input
+    const { sessionId, content, modelId, images, files } = input
 
     // 验证会话
     const session = await fastify.prisma.session.findUnique({
@@ -96,15 +108,90 @@ const chatController: FastifyPluginAsync = async (fastify) => {
       },
     })
 
-    // 获取历史消息构建上下文
+    // 保存图片附件
+    if (images && images.length > 0) {
+      await fastify.prisma.messageAttachment.createMany({
+        data: images.map((img, index) => ({
+          messageId: userMessage.id,
+          type: 'image',
+          fileName: `image_${Date.now()}_${index}.jpg`,
+          mimeType: img.mimeType,
+          size: Buffer.from(img.base64, 'base64').length,
+          base64Data: img.base64,
+          metadata: {},
+        }))
+      })
+    }
+
+    // 保存文件附件并解析内容
+    let fileContext = ''
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const buffer = Buffer.from(file.base64Data, 'base64')
+        
+        // 保存文件附件
+        await fastify.prisma.messageAttachment.create({
+          data: {
+            messageId: userMessage.id,
+            type: 'file',
+            fileName: file.fileName,
+            mimeType: file.mimeType,
+            size: file.fileSize,
+            base64Data: file.base64Data,
+            metadata: { fileType: file.fileType },
+          },
+        })
+
+        // 解析文件内容并添加到消息
+        try {
+          const parsed = await fileParserService.parseFile(
+            buffer,
+            file.fileName,
+            file.mimeType
+          )
+          fileContext += `\n\n【文件: ${parsed.fileName}】\n${parsed.content}`
+        } catch (error) {
+          console.error(`文件解析失败: ${file.fileName}`, error)
+          fileContext += `\n\n【文件: ${file.fileName}】\n[解析失败]`
+        }
+      }
+
+      // 更新消息内容，添加文件内容摘要
+      if (fileContext) {
+        await fastify.prisma.message.update({
+          where: { id: userMessage.id },
+          data: {
+            content: content + fileContext,
+          },
+        })
+      }
+    }
+
+    // 获取历史消息构建上下文（包含附件）
     const historyMessages = await fastify.prisma.message.findMany({
       where: { sessionId },
+      include: { attachments: true },
       orderBy: { createdAt: 'asc' },
     })
 
     const chatMessages: ChatMessage[] = historyMessages.map((msg) => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,
+      images: msg.attachments && msg.attachments.length > 0
+        ? msg.attachments.filter(a => a.type === 'image').map(a => ({
+            base64Data: a.base64Data || '',
+            mimeType: a.mimeType,
+          }))
+        : undefined,
+      files: msg.attachments && msg.attachments.length > 0
+        ? msg.attachments.filter(a => a.type === 'file').map(a => ({
+            fileName: a.fileName,
+            fileType: (a.metadata as any)?.fileType || 'file',
+            mimeType: a.mimeType,
+            base64Data: a.base64Data || '',
+            fileSize: a.size,
+          }))
+        : undefined,
     }))
 
     // 获取用户的模型配置
