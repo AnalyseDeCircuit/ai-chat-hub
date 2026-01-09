@@ -7,6 +7,7 @@ import { authMiddleware, requireUserId } from '../../middleware/auth.js'
 import { getAdapter } from '../../adapters/index.js'
 import { contextManagerService, createUsageStatsService, createFileParserService, tokenCounterService } from '../../services/index.js'
 import { StreamBuffer } from '../../utils/stream-buffer.js'
+import { webSearch, formatSearchResultsForAI } from '../../services/web-search.js'
 
 const ChatCompletionSchema = z.object({
   sessionId: z.string().uuid(),
@@ -23,6 +24,7 @@ const ChatCompletionSchema = z.object({
     base64Data: z.string(),
     fileSize: z.number(),
   })).optional(),
+  webSearch: z.boolean().optional().default(false), // 是否启用联网搜索
 })
 
 const StopGenerationSchema = z.object({
@@ -200,6 +202,20 @@ const chatController: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'asc' },
     })
 
+    // 如果启用联网搜索，获取搜索结果
+    let searchContext = ''
+    if (input.webSearch) {
+      try {
+        fastify.log.info(`Performing web search for: ${content.slice(0, 100)}...`)
+        const searchResponse = await webSearch(content, 5)
+        searchContext = formatSearchResultsForAI(searchResponse)
+        fastify.log.info(`Web search completed: ${searchResponse.results.length} results in ${searchResponse.searchTime}ms`)
+      } catch (error) {
+        fastify.log.warn(`Web search failed: ${error}`)
+        // 搜索失败不阻断请求，继续使用普通上下文
+      }
+    }
+
     const chatMessages: ChatMessage[] = historyMessages.map((msg) => ({
       role: msg.role as 'user' | 'assistant' | 'system',
       content: msg.content,
@@ -227,13 +243,18 @@ const chatController: FastifyPluginAsync = async (fastify) => {
       },
     })
 
+    // 构建系统提示词（含搜索上下文）
+    let systemPrompt = modelConfig?.systemPrompt || ''
+    if (searchContext) {
+      systemPrompt = (systemPrompt ? systemPrompt + '\n\n' : '') + searchContext
+    }
+
     // 使用上下文管理器优化消息列表（智能截断）
-    const systemPrompt = modelConfig?.systemPrompt || undefined
     const maxTokens = modelConfig?.maxTokens || 2048
     const contextWindow = contextManagerService.getOptimizedMessages(
       chatMessages,
       model.name,
-      systemPrompt,
+      systemPrompt || undefined,
       maxTokens
     )
 

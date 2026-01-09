@@ -9,11 +9,16 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
+import { MermaidBlock } from './MermaidBlock'
+import { ThinkingBlock } from './ThinkingBlock'
 import type { Message, Model } from '@ai-chat-hub/shared'
 
 interface ChatMessage extends Message {
   isStreaming?: boolean
   streamContent?: string
+  metadata: Message['metadata'] & {
+    reasoning?: string
+  }
 }
 
 interface MessageListProps {
@@ -131,7 +136,14 @@ function TableBlock({ children }: { children: React.ReactNode }) {
 }
 
 // 消息内容渲染组件
-function MessageContent({ content, role }: { content: string; role: string }) {
+interface MessageContentProps {
+  content: string
+  role: string
+  isStreaming?: boolean
+  reasoning?: string
+}
+
+function MessageContent({ content, role, isStreaming, reasoning }: MessageContentProps) {
   if (role === 'user') {
     return (
       <p className="whitespace-pre-wrap text-sm leading-[1.7] break-words">
@@ -140,8 +152,13 @@ function MessageContent({ content, role }: { content: string; role: string }) {
     )
   }
 
+  // 提取 <think> 标签内容（一些模型用这个格式）
+  const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/)
+  const thinkContent = thinkMatch?.[1] || reasoning || ''
+  const mainContent = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+
   // 预处理 LaTeX 公式：支持多种格式
-  const processedContent = content
+  const processedContent = mainContent
     // 标准 LaTeX 块级公式：\[ \] -> $$ ... $$ (使用双换行确保块级渲染)
     .replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, '\n\n$$$$$1$$$$\n\n')
     // 标准 LaTeX 行内公式：\( \) -> $ ... $
@@ -153,72 +170,92 @@ function MessageContent({ content, role }: { content: string; role: string }) {
     .replace(/^\s*\]\s*$/gm, '\n$$$$\n\n')
 
   return (
-    <ReactMarkdown
-      className="prose prose-sm dark:prose-invert max-w-none 
-        prose-p:leading-[1.8] prose-p:my-3 prose-pre:p-0 
-        prose-headings:mb-4 prose-headings:mt-6 prose-headings:font-semibold
-        prose-code:before:content-none prose-code:after:content-none
-        prose-ul:my-3 prose-ol:my-3 prose-li:my-1.5
-        prose-blockquote:my-4 prose-blockquote:border-l-primary"
-      remarkPlugins={[remarkMath, remarkGfm]}
-      rehypePlugins={[rehypeKatex]}
-      components={{
-        code({ node, inline, className, children, ...props }: any) {
-          const match = /language-(\w+)/.exec(className || '')
-          const codeText = String(children).replace(/\n$/, '')
+    <div className={cn(isStreaming && 'animate-fade-in')}>
+      {/* 思考过程（如果有） */}
+      {thinkContent && (
+        <ThinkingBlock 
+          content={thinkContent} 
+          isStreaming={isStreaming && !mainContent}
+          defaultExpanded={isStreaming}
+        />
+      )}
+      
+      {/* 主要内容 */}
+      <ReactMarkdown
+        className={cn(
+          "prose prose-sm dark:prose-invert max-w-none",
+          "prose-p:leading-[1.8] prose-p:my-3 prose-pre:p-0",
+          "prose-headings:mb-4 prose-headings:mt-6 prose-headings:font-semibold",
+          "prose-code:before:content-none prose-code:after:content-none",
+          "prose-ul:my-3 prose-ol:my-3 prose-li:my-1.5",
+          "prose-blockquote:my-4 prose-blockquote:border-l-primary"
+        )}
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          code({ node, inline, className, children, ...props }: any) {
+            const match = /language-(\w+)/.exec(className || '')
+            const codeText = String(children).replace(/\n$/, '')
 
-          if (!inline && match) {
-            return <CodeBlock language={match[1]} code={codeText} />
-          }
+            // Mermaid 图表
+            if (!inline && match && match[1] === 'mermaid') {
+              return <MermaidBlock code={codeText} />
+            }
 
-          return (
-            <code 
-              className="bg-muted/50 px-1.5 py-0.5 rounded text-sm font-mono text-primary" 
-              {...props}
-            >
-              {children}
-            </code>
-          )
-        },
-        // 有序列表
-        ol({ children }: any) {
-          return <ol className="list-decimal list-inside space-y-2 my-4">{children}</ol>
-        },
-        // 无序列表
-        ul({ children }: any) {
-          return <ul className="list-disc list-inside space-y-2 my-4">{children}</ul>
-        },
-        // 列表项
-        li({ children }: any) {
-          return <li className="leading-relaxed break-words whitespace-normal">{children}</li>
-        },
-        // 段落
-        p({ children }: any) {
-          return <p className="my-3 leading-[1.8]">{children}</p>
-        },
-        table({ children }: any) {
-          return (
-            <TableBlock>
-              <table className="w-full">{children}</table>
-            </TableBlock>
-          )
-        },
-        thead({ children }: any) {
-          return <thead className="border-b border-border/60">{children}</thead>
-        },
-        th({ children }: any) {
-          return <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">{children}</th>
-        },
-        td({ children }: any) {
-          return <td className="px-4 py-4 whitespace-nowrap">{children}</td>
-        },
-        tr({ children }: any) {
-          return <tr className="border-b border-border/30">{children}</tr>
-        },
-      }}
-    >
-      {processedContent}
-    </ReactMarkdown>
+            // 普通代码块
+            if (!inline && match) {
+              return <CodeBlock language={match[1]} code={codeText} />
+            }
+
+            return (
+              <code 
+                className="bg-muted/50 px-1.5 py-0.5 rounded text-sm font-mono text-primary" 
+                {...props}
+              >
+                {children}
+              </code>
+            )
+          },
+          // 有序列表
+          ol({ children }: any) {
+            return <ol className="list-decimal list-inside space-y-2 my-4">{children}</ol>
+          },
+          // 无序列表
+          ul({ children }: any) {
+            return <ul className="list-disc list-inside space-y-2 my-4">{children}</ul>
+          },
+          // 列表项
+          li({ children }: any) {
+            return <li className="leading-relaxed break-words whitespace-normal">{children}</li>
+          },
+          // 段落
+          p({ children }: any) {
+            return <p className="my-3 leading-[1.8]">{children}</p>
+          },
+          table({ children }: any) {
+            return (
+              <TableBlock>
+                <table className="w-full">{children}</table>
+              </TableBlock>
+            )
+          },
+          thead({ children }: any) {
+            return <thead className="border-b border-border/60">{children}</thead>
+          },
+          th({ children }: any) {
+            return <th className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap">{children}</th>
+          },
+          td({ children }: any) {
+            return <td className="px-4 py-4 whitespace-nowrap">{children}</td>
+          },
+          tr({ children }: any) {
+            return <tr className="border-b border-border/30">{children}</tr>
+          },
+        }}
+      >
+        {processedContent}
+      </ReactMarkdown>
+    </div>
   )
 }
 
@@ -277,7 +314,12 @@ function MessageItem({ message, isLast, models, onRegenerate, onFeedback }: Mess
               : 'w-full'
           )}
         >
-          <MessageContent content={content} role={message.role} />
+          <MessageContent 
+            content={content} 
+            role={message.role} 
+            isStreaming={message.isStreaming}
+            reasoning={(message.metadata as any)?.reasoning}
+          />
           
           {/* 流式加载光标 */}
           {message.isStreaming && (

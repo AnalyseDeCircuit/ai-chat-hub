@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bot, Menu } from 'lucide-react'
-import { Sidebar, MessageList, ChatInput, ModelSelector, ModelConfigDialog, ShareDialog, type UploadedImage } from '@/components/chat'
+import { Sidebar, MessageList, ChatInput, ModelSelector, ModelConfigDialog, ShareDialog, type UploadedImage, type SendOptions } from '@/components/chat'
 import { type UploadedFile } from '@/components/chat/FileUpload'
 import { Button } from '@/components/ui/button'
 import { useChatStore } from '@/stores/chat'
@@ -161,7 +161,7 @@ export default function ChatPage() {
   }, [])
 
   // 发送消息
-  const handleSendMessage = useCallback(async (content: string, images?: UploadedImage[], files?: UploadedFile[]) => {
+  const handleSendMessage = useCallback(async (content: string, images?: UploadedImage[], files?: UploadedFile[], options?: SendOptions) => {
     if (!currentModelId) {
       alert('请先选择模型')
       return
@@ -274,7 +274,8 @@ export default function ChatPage() {
         abortControllerRef.current = null
       },
       imageData,
-      fileData
+      fileData,
+      options?.webSearch
     )
   }, [currentSession, currentModelId, messages])
 

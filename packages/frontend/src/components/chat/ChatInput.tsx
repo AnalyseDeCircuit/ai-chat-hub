@@ -1,13 +1,17 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Square, X, FileText } from 'lucide-react'
+import { Send, Square, X, FileText, Globe, SearchCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ImageUpload, type UploadedImage } from './ImageUpload'
 import { FileUpload, type UploadedFile } from './FileUpload'
 import { cn } from '@/lib/utils'
 
+export interface SendOptions {
+  webSearch?: boolean
+}
+
 interface ChatInputProps {
-  onSend: (message: string, images?: UploadedImage[], files?: UploadedFile[]) => void
+  onSend: (message: string, images?: UploadedImage[], files?: UploadedFile[], options?: SendOptions) => void
   onStop: () => void
   isSending: boolean
   disabled?: boolean
@@ -29,6 +33,8 @@ export function ChatInput({
   const [message, setMessage] = useState('')
   const [images, setImages] = useState<UploadedImage[]>([])
   const [files, setFiles] = useState<UploadedFile[]>([])
+  const [isComposing, setIsComposing] = useState(false) // 中文输入法状态
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false) // 联网搜索开关
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const supportsVision = visionCapabilities?.supportsVision ?? false
@@ -50,7 +56,8 @@ export function ChatInput({
     onSend(
       trimmedMessage,
       images.length > 0 ? images : undefined,
-      files.length > 0 ? files : undefined
+      files.length > 0 ? files : undefined,
+      { webSearch: webSearchEnabled }
     )
     
     setMessage('')
@@ -64,11 +71,24 @@ export function ChatInput({
 
   // 键盘事件处理
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // 如果正在使用输入法（如中文输入法），不处理 Enter
+    if (isComposing) return
+    
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSubmit()
     }
-  }, [handleSubmit])
+  }, [handleSubmit, isComposing])
+
+  // 输入法开始组合（开始输入中文）
+  const handleCompositionStart = useCallback(() => {
+    setIsComposing(true)
+  }, [])
+
+  // 输入法结束组合（选择中文完成）
+  const handleCompositionEnd = useCallback(() => {
+    setIsComposing(false)
+  }, [])
 
   // 移除图片
   const removeImage = useCallback((id: string) => {
@@ -147,6 +167,28 @@ export function ChatInput({
           'flex items-end gap-2 p-3 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm',
           'focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 transition-all'
         )}>
+          {/* 联网搜索开关 */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              'w-9 h-9 rounded-xl flex-shrink-0 transition-colors',
+              webSearchEnabled 
+                ? 'text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20' 
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+            onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+            disabled={disabled || isSending}
+            title={webSearchEnabled ? '已开启联网搜索' : '开启联网搜索'}
+          >
+            {webSearchEnabled ? (
+              <SearchCheck className="w-4 h-4" />
+            ) : (
+              <Globe className="w-4 h-4" />
+            )}
+          </Button>
+
           {/* 图片上传按钮 */}
           {supportsVision && (
             <ImageUpload
@@ -175,6 +217,8 @@ export function ChatInput({
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
             placeholder="输入消息..."
             disabled={disabled || isSending}
             className={cn(
@@ -214,6 +258,7 @@ export function ChatInput({
         {/* 底部提示 */}
         <div className="mt-2 text-center">
           <p className="text-xs text-muted-foreground/50">
+            {webSearchEnabled && <span className="text-blue-500">🌐 联网搜索已开启 · </span>}
             {supportsVision ? '支持图片和文件上传' : '支持文件上传'} · 
             pdf, docx, xlsx, csv, txt, md · 最大 50MB
           </p>

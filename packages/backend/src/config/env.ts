@@ -33,6 +33,11 @@ const envSchema = z.object({
 
   // CORS
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+
+  // 联网搜索 API（可选）
+  SEARXNG_URL: z.string().url().optional(),
+  SERPER_API_KEY: z.string().optional(),
+  TAVILY_API_KEY: z.string().optional(),
 })
 
 // 解析环境变量
