@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
-import { X, FileText, Loader2, Upload } from 'lucide-react'
+import { Loader2, Upload } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 
 export interface UploadedFile {
   id: string
@@ -22,17 +22,6 @@ interface FileUploadProps {
   disabled?: boolean
 }
 
-const SUPPORTED_TYPES = {
-  'application/pdf': 'PDF',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-    'Word',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel',
-  'application/vnd.ms-excel': 'Excel',
-  'text/csv': 'CSV',
-  'text/plain': 'Text',
-  'text/markdown': 'Markdown',
-}
-
 export function FileUpload({
   files,
   onFilesChange,
@@ -46,13 +35,6 @@ export function FileUpload({
   const [error, setError] = useState<string | null>(null)
 
   const generateId = () => Math.random().toString(36).substr(2, 9)
-
-  const getFileTypeLabel = (mimeType: string): string => {
-    return (
-      SUPPORTED_TYPES[mimeType as keyof typeof SUPPORTED_TYPES] ||
-      'File'
-    )
-  }
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes'
@@ -119,94 +101,53 @@ export function FileUpload({
     }
   }
 
-  const removeFile = (id: string) => {
-    onFilesChange(files.filter((f) => f.id !== id))
-  }
-
-  const getFileIcon = (fileType: string) => {
-    return <FileText className="w-4 h-4" />
-  }
-
   return (
-    <div>
-      {/* 文件列表 */}
-      {files.length > 0 && (
-        <div className="flex flex-col gap-2 mb-3">
-          {files.map((file) => (
-            <div
-              key={file.id}
-              className="flex items-center gap-2 p-2 bg-accent/50 rounded-lg border border-border/50 group"
-            >
-              <div className="flex-shrink-0">
-                {getFileIcon(file.fileType)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">
-                  {file.fileName}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {file.fileType} • {file.size}
-                </div>
-              </div>
-              <button
-                onClick={() => removeFile(file.id)}
-                className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                type="button"
-                title="删除文件"
-              >
-                <X className="w-4 h-4 text-destructive hover:text-destructive/80" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 错误提示 */}
-      {error && (
-        <div className="text-xs text-destructive mb-2 bg-destructive/10 px-2 py-1 rounded">
-          {error}
-        </div>
-      )}
-
-      {/* 上传按钮和状态 */}
-      <div className="flex items-center gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={supportedFormats.map((f) => `.${f}`).join(',')}
-          multiple
-          onChange={handleFileChange}
-          className="hidden"
-          disabled={disabled || files.length >= maxFiles}
-        />
-
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={disabled || files.length >= maxFiles || isProcessing}
-          className="rounded-full"
-          title={`上传文件 (${files.length}/${maxFiles})`}
-        >
-          {isProcessing ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <Upload className="w-5 h-5" />
-          )}
-        </Button>
-
-        {files.length > 0 && (
-          <div className="text-xs text-muted-foreground">
-            {files.length}/{maxFiles}
-          </div>
+    <div className="relative">
+      {/* 错误提示 - 绝对定位避免布局跳动 */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            className="absolute bottom-full left-0 mb-2 text-xs text-destructive bg-destructive/10 px-3 py-1.5 rounded-lg whitespace-nowrap shadow-sm"
+          >
+            {error}
+          </motion.div>
         )}
-      </div>
+      </AnimatePresence>
 
-      {/* 支持格式提示 */}
-      <div className="text-xs text-muted-foreground mt-2">
-        支持: {supportedFormats.join(', ')} • 最大 {(maxSize / 1024 / 1024).toFixed(0)}MB
-      </div>
+      {/* 上传按钮 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={supportedFormats.map((f) => `.${f}`).join(',')}
+        multiple
+        onChange={handleFileChange}
+        className="hidden"
+        disabled={disabled || files.length >= maxFiles}
+      />
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={disabled || files.length >= maxFiles || isProcessing}
+        className="rounded-full hover:bg-accent transition-colors relative"
+        title={`上传文件 (${files.length}/${maxFiles})`}
+      >
+        {isProcessing ? (
+          <Loader2 className="w-5 h-5 animate-spin text-primary" />
+        ) : (
+          <Upload className="w-5 h-5" />
+        )}
+        {files.length > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary text-[10px] font-bold text-primary-foreground rounded-full flex items-center justify-center">
+            {files.length}
+          </span>
+        )}
+      </Button>
     </div>
   )
 }

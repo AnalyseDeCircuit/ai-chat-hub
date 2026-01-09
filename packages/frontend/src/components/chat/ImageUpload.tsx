@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { X, Image as ImageIcon, Loader2 } from 'lucide-react'
+import { Image as ImageIcon, Loader2 } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 
 export interface UploadedImage {
@@ -141,50 +142,21 @@ export function ImageUpload({
     }
   }
 
-  const removeImage = (id: string) => {
-    const image = images.find((img) => img.id === id)
-    if (image) {
-      URL.revokeObjectURL(image.preview)
-    }
-    onImagesChange(images.filter((img) => img.id !== id))
-  }
-
   return (
-    <div>
-      {/* 图片预览 */}
-      {images.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2">
-          {images.map((img) => (
-            <div
-              key={img.id}
-              className="relative group w-20 h-20 rounded-lg overflow-hidden border border-border"
-            >
-              <img
-                src={img.preview}
-                alt={img.file.name}
-                className="w-full h-full object-cover"
-              />
-              <button
-                onClick={() => removeImage(img.id)}
-                className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-                type="button"
-              >
-                <X className="w-3 h-3" />
-              </button>
-              <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 py-0.5 truncate">
-                {img.file.name}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 错误提示 */}
-      {error && (
-        <div className="text-xs text-destructive mb-2 bg-destructive/10 px-2 py-1 rounded">
-          {error}
-        </div>
-      )}
+    <div className="relative">
+      {/* 错误提示 - 绝对定位避免布局跳动 */}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            className="absolute bottom-full left-0 mb-2 text-xs text-destructive bg-destructive/10 px-3 py-1.5 rounded-lg whitespace-nowrap shadow-sm"
+          >
+            {error}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 上传按钮 */}
       <input
@@ -203,13 +175,18 @@ export function ImageUpload({
         size="icon"
         onClick={() => fileInputRef.current?.click()}
         disabled={disabled || images.length >= maxImages || isProcessing}
-        className="rounded-full"
+        className="rounded-full hover:bg-accent transition-colors relative"
         title={`上传图片 (${images.length}/${maxImages})`}
       >
         {isProcessing ? (
-          <Loader2 className="w-5 h-5 animate-spin" />
+          <Loader2 className="w-5 h-5 animate-spin text-primary" />
         ) : (
           <ImageIcon className="w-5 h-5" />
+        )}
+        {images.length > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary text-[10px] font-bold text-primary-foreground rounded-full flex items-center justify-center">
+            {images.length}
+          </span>
         )}
       </Button>
     </div>

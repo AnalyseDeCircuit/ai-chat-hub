@@ -1,14 +1,14 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bot } from 'lucide-react'
+import { Bot, Menu } from 'lucide-react'
 import { Sidebar, MessageList, ChatInput, ModelSelector, ShareDialog, type UploadedImage } from '@/components/chat'
-import { FileUpload, type UploadedFile } from '@/components/chat/FileUpload'
+import { type UploadedFile } from '@/components/chat/FileUpload'
 import { Button } from '@/components/ui/button'
 import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
 import { sessionApi, chatApi, authApi } from '@/api'
 import { getApiKeys } from '@/api/key'
-import type { Session, Message, Model, ApiKey } from '@ai-chat-hub/shared'
+import type { Session, Message, ApiKey } from '@ai-chat-hub/shared'
 
 export default function ChatPage() {
   const navigate = useNavigate()
@@ -16,7 +16,7 @@ export default function ChatPage() {
   const [userKeys, setUserKeys] = useState<ApiKey[]>([])
   const [shareDialogUrl, setShareDialogUrl] = useState<string | null>(null)
   
-  const { user, logout: authLogout, refreshToken } = useAuthStore()
+  const { logout: authLogout, refreshToken } = useAuthStore()
   const {
     sessions,
     setSessions,
@@ -54,7 +54,6 @@ export default function ChatPage() {
     chatApi.getModels().then((data) => {
       setModels(data)
       if (data.length > 0 && !currentModelId) {
-        // 默认选择第一个模型
         setCurrentModelId(data[0].id)
       }
     }).catch(console.error)
@@ -72,7 +71,6 @@ export default function ChatPage() {
   // 当可用模型列表变化时，确保选择了有效模型
   useEffect(() => {
     if (availableModels.length > 0) {
-      // 如果当前模型不在可用列表中，选择第一个可用模型
       if (!currentModelId || !availableModels.find(m => m.id === currentModelId)) {
         setCurrentModelId(availableModels[0].id)
       }
@@ -132,15 +130,12 @@ export default function ChatPage() {
   const handleArchiveSession = useCallback(async (sessionId: string) => {
     try {
       const updatedSession = await sessionApi.archive(sessionId)
-      // 更新会话列表
       setSessions(sessions.map(s => s.id === sessionId ? updatedSession : s))
-      // 如果归档的是当前会话，清空当前会话
       if (currentSession?.id === sessionId) {
         setCurrentSession(null)
       }
     } catch (error) {
       console.error('归档会话失败:', error)
-      alert('归档失败')
     }
   }, [sessions, currentSession])
 
@@ -148,11 +143,9 @@ export default function ChatPage() {
   const handleUnarchiveSession = useCallback(async (sessionId: string) => {
     try {
       const updatedSession = await sessionApi.unarchive(sessionId)
-      // 更新会话列表
       setSessions(sessions.map(s => s.id === sessionId ? updatedSession : s))
     } catch (error) {
       console.error('取消归档失败:', error)
-      alert('取消归档失败')
     }
   }, [sessions])
 
@@ -163,7 +156,6 @@ export default function ChatPage() {
       setShareDialogUrl(shareUrl)
     } catch (error) {
       console.error('分享失败:', error)
-      alert('分享失败')
     }
   }, [])
 
@@ -236,7 +228,7 @@ export default function ChatPage() {
       fileName: file.fileName,
       fileType: file.fileType,
       mimeType: file.mimeType,
-      base64Data: '', // 需要从文件读取
+      base64Data: '',
       fileSize: file.file.size,
     }))
 
@@ -264,17 +256,14 @@ export default function ChatPage() {
       sessionId,
       content,
       currentModelId,
-      // onChunk
       (chunk) => {
         appendToMessage(assistantMessageId, chunk)
       },
-      // onDone
       (messageId, usage) => {
         finishStreamingMessage(assistantMessageId, messageId, usage)
         setSending(false)
         abortControllerRef.current = null
       },
-      // onError
       (error) => {
         updateMessage(assistantMessageId, {
           isStreaming: false,
@@ -283,9 +272,7 @@ export default function ChatPage() {
         setSending(false)
         abortControllerRef.current = null
       },
-      // images
       imageData,
-      // files
       fileData
     )
   }, [currentSession, currentModelId, messages])
@@ -316,7 +303,7 @@ export default function ChatPage() {
   }, [refreshToken])
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="h-screen w-screen overflow-hidden bg-background flex">
       {/* Sidebar */}
       <Sidebar
         onNewChat={handleNewChat}
@@ -328,22 +315,40 @@ export default function ChatPage() {
         onLogout={handleLogout}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col relative overflow-hidden bg-background">
-        {/* Decorative Background Gradient */}
-        <div className="absolute top-0 left-0 right-0 h-[500px] bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
+      {/* Main Area */}
+      <main className="flex-1 flex flex-col min-w-0 h-full relative">
+        {/* Background decorations */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[400px] bg-gradient-to-b from-primary/5 to-transparent" />
+          <div 
+            className="absolute -top-32 -right-32 w-[500px] h-[500px] bg-primary/5 rounded-full blur-[100px] animate-pulse" 
+            style={{ animationDuration: '8s' }} 
+          />
+          <div 
+            className="absolute -bottom-32 -left-32 w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[80px] animate-pulse" 
+            style={{ animationDuration: '12s', animationDelay: '2s' }} 
+          />
+        </div>
 
         {/* Header */}
-        <header className="h-16 border-b border-border/40 flex items-center px-6 justify-between bg-background/60 backdrop-blur-md sticky top-0 z-10">
-          <div className="flex items-center gap-3">
+        <header className="h-14 flex-shrink-0 flex items-center px-4 border-b border-border/40 bg-background/80 backdrop-blur-xl z-10">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
             {!sidebarOpen && (
-              <Button variant="ghost" size="icon" onClick={toggleSidebar} className="rounded-full">
-                <Bot className="w-5 h-5 text-primary" />
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={toggleSidebar}
+                className="flex-shrink-0 rounded-lg hover:bg-accent"
+              >
+                <Menu className="w-5 h-5" />
               </Button>
             )}
-            <h2 className="font-bold text-lg tracking-tight">
-              {currentSession?.title || '新的智能对话'}
-            </h2>
+            <div className="flex items-center gap-2 min-w-0">
+              <Bot className="w-5 h-5 text-primary flex-shrink-0" />
+              <h1 className="font-semibold truncate">
+                {currentSession?.title || '新对话'}
+              </h1>
+            </div>
           </div>
           <ModelSelector
             models={availableModels}
@@ -353,20 +358,24 @@ export default function ChatPage() {
           />
         </header>
 
-        {/* Messages */}
-        <MessageList
-          messages={messages as any}
-          isLoading={isLoading || isSending}
-        />
+        {/* Messages Area */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <MessageList
+            messages={messages as any}
+            isLoading={isLoading || isSending}
+          />
+        </div>
 
-        {/* Input */}
-        <ChatInput
-          onSend={handleSendMessage}
-          onStop={handleStop}
-          isSending={isSending}
-          visionCapabilities={visionCapabilities}
-        />
-      </div>
+        {/* Input Area */}
+        <div className="flex-shrink-0 border-t border-border/40 bg-background/80 backdrop-blur-xl relative z-10">
+          <ChatInput
+            onSend={handleSendMessage}
+            onStop={handleStop}
+            isSending={isSending}
+            visionCapabilities={visionCapabilities}
+          />
+        </div>
+      </main>
 
       {/* Share Dialog */}
       {shareDialogUrl && (

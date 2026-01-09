@@ -1,10 +1,17 @@
-import * as pdfjsLib from 'pdfjs-dist'
 import * as XLSX from 'xlsx'
 import * as mammoth from 'mammoth'
 import * as csvParse from 'csv-parse/sync'
 
-// 设置 PDF.js 的 worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+// 延迟导入 PDF.js 以避免在 Node.js 环境中加载浏览器 API
+let pdfjsLib: any = null
+
+async function getPdfJS() {
+  if (!pdfjsLib) {
+    // 使用 legacy 版本，兼容 Node.js 环境
+    pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  }
+  return pdfjsLib
+}
 
 export interface ParsedFileContent {
   fileName: string
@@ -21,7 +28,18 @@ export class FileParserService {
    */
   async parsePDF(buffer: Buffer, fileName: string): Promise<ParsedFileContent> {
     try {
-      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+      const pdfjs = await getPdfJS()
+      // PDF.js 需要 Uint8Array，而不是 Buffer
+      const uint8Array = new Uint8Array(buffer)
+      
+      // 使用兼容 Node.js 的配置
+      const pdf = await pdfjs.getDocument({ 
+        data: uint8Array,
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true,
+      }).promise
+      
       const pageCount = pdf.numPages
       let fullText = ''
 
@@ -44,8 +62,8 @@ export class FileParserService {
         pages: pageCount,
         metadata: {
           totalPages: pageCount,
-          extractedPages: Math.min(pageCount, 50),
-        },
+          extractedPages: Math.min(pageCount, 50) as number,
+        } as Record<string, any>,
       }
     } catch (error) {
       throw new Error(`PDF 解析失败: ${error instanceof Error ? error.message : '未知错误'}`)
@@ -118,11 +136,13 @@ export class FileParserService {
       // 将记录转换为表格格式
       let content = ''
       if (records.length > 0) {
-        const headers = Object.keys(records[0])
+        const firstRecord = records[0] as Record<string, unknown>
+        const headers = Object.keys(firstRecord)
         content = headers.join('\t') + '\n'
         for (const record of records.slice(0, 1000)) {
           // 限制最多 1000 行
-          content += headers.map(h => record[h] || '').join('\t') + '\n'
+          const recordData = record as Record<string, unknown>
+          content += headers.map(h => recordData[h] || '').join('\t') + '\n'
         }
       }
 
@@ -133,8 +153,8 @@ export class FileParserService {
         content: content.trim(),
         metadata: {
           rowCount: records.length,
-          columnCount: records.length > 0 ? Object.keys(records[0]).length : 0,
-          columns: records.length > 0 ? Object.keys(records[0]) : [],
+          columnCount: records.length > 0 ? Object.keys(records[0] as Record<string, unknown>).length : 0,
+          columns: records.length > 0 ? Object.keys(records[0] as Record<string, unknown>) : [],
           limitedRows: Math.min(records.length, 1000),
         },
       }

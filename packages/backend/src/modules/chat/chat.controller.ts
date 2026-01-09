@@ -77,11 +77,13 @@ const chatController: FastifyPluginAsync = async (fastify) => {
     })
 
     if (!apiKeyRecord || !apiKeyRecord.isValid) {
+      const errorMsg = `请先配置 ${model.provider} 的 API 密钥`
+      fastify.log.error(`API 密钥缺失: userId=${userId}, provider=${model.provider}`)
       return sendError(
         reply,
         ErrorCodes.KEY_PROVIDER_REQUIRED,
         HttpStatus.BAD_REQUEST,
-        `请先配置 ${model.provider} 的 API 密钥`
+        errorMsg
       )
     }
 
