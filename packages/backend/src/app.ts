@@ -14,6 +14,7 @@ import { messageController } from './modules/message/index.js'
 import { modelController } from './modules/model/index.js'
 import { keyController } from './modules/key/index.js'
 import { chatController } from './modules/chat/index.js'
+import { registerBuiltinTools } from './services/builtin-tools.js'
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -70,6 +71,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // 注册 JWT 插件
   await app.register(jwtPlugin)
+
+  // 注册内置工具（Function Calling）
+  registerBuiltinTools()
 
   // 健康检查路由
   app.get('/health', async () => {

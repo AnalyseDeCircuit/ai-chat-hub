@@ -9,7 +9,7 @@ A powerful modern AI chat platform supporting seamless collaboration among multi
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.x-61dafb.svg)](https://reactjs.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-4.x-black.svg)](https://fastify.io/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 English | [简体中文](README.md)
 
@@ -209,15 +209,15 @@ chore: Build/toolchain
 
 ## 📄 License
 
-This project is licensed under [CC-BY-NC 4.0](LICENSE) (Creative Commons Attribution-NonCommercial 4.0 International).
+This project is licensed under the [Apache License 2.0](LICENSE).
 
 **License Terms**:
-- ✅ Free to use and modify
-- ✅ Must provide attribution
-- ✅ Non-commercial use only
-- ❌ Commercial use prohibited
+- ✅ Free to use, modify, and distribute
+- ✅ Commercial use permitted
+- ✅ Must retain copyright and license notices
+- ✅ Modified files must state changes
 
-For details, see [LICENSE](LICENSE) or visit [Creative Commons](https://creativecommons.org/licenses/by-nc/4.0/)
+For details, see [LICENSE](LICENSE) or visit [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
 
 ## 🙏 Acknowledgments
 

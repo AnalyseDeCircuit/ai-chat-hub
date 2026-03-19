@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import { MermaidBlock } from './MermaidBlock'
 import { ThinkingBlock } from './ThinkingBlock'
+import { ToolCallList } from './ToolCallBlock'
 import type { Message, Model } from '@ai-chat-hub/shared'
 
 interface ChatMessage extends Message {
@@ -18,6 +19,13 @@ interface ChatMessage extends Message {
   streamContent?: string
   metadata: Message['metadata'] & {
     reasoning?: string
+    toolCalls?: Array<{
+      id: string
+      name: string
+      arguments: string
+      status: 'pending' | 'running' | 'completed' | 'error'
+      result?: string
+    }>
   }
 }
 
@@ -141,9 +149,16 @@ interface MessageContentProps {
   role: string
   isStreaming?: boolean
   reasoning?: string
+  toolCalls?: Array<{
+    id: string
+    name: string
+    arguments: string
+    status: 'pending' | 'running' | 'completed' | 'error'
+    result?: string
+  }>
 }
 
-function MessageContent({ content, role, isStreaming, reasoning }: MessageContentProps) {
+function MessageContent({ content, role, isStreaming, reasoning, toolCalls }: MessageContentProps) {
   if (role === 'user') {
     return (
       <p className="whitespace-pre-wrap text-sm leading-[1.7] break-words">
@@ -178,6 +193,11 @@ function MessageContent({ content, role, isStreaming, reasoning }: MessageConten
           isStreaming={isStreaming && !mainContent}
           defaultExpanded={isStreaming}
         />
+      )}
+      
+      {/* 工具调用（如果有） */}
+      {toolCalls && toolCalls.length > 0 && (
+        <ToolCallList toolCalls={toolCalls} />
       )}
       
       {/* 主要内容 */}
@@ -319,6 +339,7 @@ function MessageItem({ message, isLast, models, onRegenerate, onFeedback }: Mess
             role={message.role} 
             isStreaming={message.isStreaming}
             reasoning={(message.metadata as any)?.reasoning}
+            toolCalls={(message.metadata as any)?.toolCalls}
           />
           
           {/* 流式加载光标 */}

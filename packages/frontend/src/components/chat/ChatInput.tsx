@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Send, Square, X, FileText, Globe, SearchCheck } from 'lucide-react'
+import { Send, Square, X, FileText, Globe, SearchCheck, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ImageUpload, type UploadedImage } from './ImageUpload'
@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 
 export interface SendOptions {
   webSearch?: boolean
+  enableTools?: boolean
 }
 
 interface ChatInputProps {
@@ -21,6 +22,7 @@ interface ChatInputProps {
     supportedFormats?: string[]
     maxImageSize?: number
   }
+  supportsTools?: boolean // 当前模型是否支持 Function Calling
 }
 
 export function ChatInput({
@@ -29,12 +31,14 @@ export function ChatInput({
   isSending,
   disabled,
   visionCapabilities,
+  supportsTools = false,
 }: ChatInputProps) {
   const [message, setMessage] = useState('')
   const [images, setImages] = useState<UploadedImage[]>([])
   const [files, setFiles] = useState<UploadedFile[]>([])
   const [isComposing, setIsComposing] = useState(false) // 中文输入法状态
   const [webSearchEnabled, setWebSearchEnabled] = useState(false) // 联网搜索开关
+  const [toolsEnabled, setToolsEnabled] = useState(false) // 工具调用开关
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const supportsVision = visionCapabilities?.supportsVision ?? false
@@ -57,7 +61,7 @@ export function ChatInput({
       trimmedMessage,
       images.length > 0 ? images : undefined,
       files.length > 0 ? files : undefined,
-      { webSearch: webSearchEnabled }
+      { webSearch: webSearchEnabled, enableTools: toolsEnabled }
     )
     
     setMessage('')
@@ -167,6 +171,26 @@ export function ChatInput({
           'flex items-end gap-2 p-3 rounded-2xl border border-border/50 bg-card/80 backdrop-blur-sm',
           'focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 transition-all'
         )}>
+          {/* Agent 工具开关 */}
+          {supportsTools && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                'w-9 h-9 rounded-xl flex-shrink-0 transition-colors',
+                toolsEnabled 
+                  ? 'text-purple-500 hover:text-purple-600 bg-purple-500/10 hover:bg-purple-500/20' 
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+              onClick={() => setToolsEnabled(!toolsEnabled)}
+              disabled={disabled || isSending}
+              title={toolsEnabled ? '已开启 Agent 模式（联网搜索、计算器等）' : '开启 Agent 模式'}
+            >
+              <Wrench className="w-4 h-4" />
+            </Button>
+          )}
+
           {/* 联网搜索开关 */}
           <Button
             type="button"
@@ -258,7 +282,8 @@ export function ChatInput({
         {/* 底部提示 */}
         <div className="mt-2 text-center">
           <p className="text-xs text-muted-foreground/50">
-            {webSearchEnabled && <span className="text-blue-500">🌐 联网搜索已开启 · </span>}
+            {toolsEnabled && <span className="text-purple-500">🔧 Agent 模式 · </span>}
+            {webSearchEnabled && !toolsEnabled && <span className="text-blue-500">🌐 联网搜索已开启 · </span>}
             {supportsVision ? '支持图片和文件上传' : '支持文件上传'} · 
             pdf, docx, xlsx, csv, txt, md · 最大 50MB
           </p>

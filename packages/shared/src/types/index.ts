@@ -255,7 +255,7 @@ export interface ChatCompletionInput {
 }
 
 export interface ChatMessage {
-  role: MessageRole
+  role: MessageRole | 'tool'
   content: string
   images?: Array<{
     base64Data: string
@@ -268,10 +268,14 @@ export interface ChatMessage {
     base64Data: string
     fileSize: number
   }>
+  // Function Calling 相关字段
+  toolCalls?: ToolCall[]
+  toolCallId?: string // 用于 tool role 消息
+  name?: string // 工具名称（用于 tool role 消息）
 }
 
 export interface StreamChunk {
-  type: 'content' | 'done' | 'error'
+  type: 'content' | 'done' | 'error' | 'tool_call' | 'tool_result' | 'reasoning'
   content?: string
   messageId?: string
   error?: string
@@ -280,4 +284,69 @@ export interface StreamChunk {
     completionTokens: number
     totalTokens: number
   }
+  // Function Calling 相关
+  toolCall?: ToolCall
+  toolResult?: ToolResult
+}
+
+// ==================== Function Calling / Tools 相关类型 ====================
+
+/**
+ * 工具定义 - 描述一个可调用的工具
+ */
+export interface ToolDefinition {
+  name: string
+  description: string
+  parameters: JSONSchema
+}
+
+/**
+ * JSON Schema 类型定义（简化版）
+ */
+export interface JSONSchema {
+  type: 'object' | 'array' | 'string' | 'number' | 'boolean' | 'null'
+  properties?: Record<string, JSONSchema & {
+    description?: string
+    enum?: string[]
+  }>
+  required?: string[]
+  items?: JSONSchema
+  description?: string
+}
+
+/**
+ * 工具调用 - 模型请求调用某个工具
+ */
+export interface ToolCall {
+  id: string
+  name: string
+  arguments: string // JSON 字符串
+}
+
+/**
+ * 工具执行结果
+ */
+export interface ToolResult {
+  toolCallId: string
+  name: string
+  content: string
+  isError?: boolean
+}
+
+/**
+ * 内置工具类型
+ */
+export type BuiltinToolType = 
+  | 'web_search'       // 联网搜索
+  | 'get_current_time' // 获取当前时间
+  | 'calculator'       // 计算器
+  | 'url_reader'       // URL 内容读取
+
+/**
+ * 工具配置
+ */
+export interface ToolConfig {
+  enabled: boolean
+  builtinTools: BuiltinToolType[]
+  customTools?: ToolDefinition[]
 }

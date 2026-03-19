@@ -2,10 +2,10 @@ import { FastifyPluginAsync } from 'fastify'
 import { z } from 'zod'
 import { sendSuccess, sendError } from '../../utils/response.js'
 import { HttpStatus, ErrorCodes } from '@ai-chat-hub/shared'
-import type { ChatMessage } from '@ai-chat-hub/shared'
+import type { ChatMessage, BuiltinToolType } from '@ai-chat-hub/shared'
 import { authMiddleware, requireUserId } from '../../middleware/auth.js'
 import { getAdapter } from '../../adapters/index.js'
-import { contextManagerService, createUsageStatsService, createFileParserService, tokenCounterService } from '../../services/index.js'
+import { contextManagerService, createUsageStatsService, createFileParserService, tokenCounterService, toolRegistry, executeAgent } from '../../services/index.js'
 import { StreamBuffer } from '../../utils/stream-buffer.js'
 import { webSearch, formatSearchResultsForAI } from '../../services/web-search.js'
 
@@ -24,7 +24,10 @@ const ChatCompletionSchema = z.object({
     base64Data: z.string(),
     fileSize: z.number(),
   })).optional(),
-  webSearch: z.boolean().optional().default(false), // 是否启用联网搜索
+  webSearch: z.boolean().optional().default(false), // 是否启用联网搜索（兼容旧版）
+  // Agent 模式配置
+  enableTools: z.boolean().optional().default(false), // 是否启用工具调用
+  tools: z.array(z.enum(['web_search', 'get_current_time', 'calculator', 'url_reader'])).optional(), // 启用的工具列表
 })
 
 const StopGenerationSchema = z.object({
@@ -317,52 +320,130 @@ const chatController: FastifyPluginAsync = async (fastify) => {
     })
 
     try {
-      await adapter.streamCompletion(
-        apiKey,
-        model.name,
-        contextWindow.messages, // 使用优化后的消息
-        {
-          temperature: modelConfig?.temperature ? Number(modelConfig.temperature) : 0.7,
-          maxTokens,
-          topP: modelConfig?.topP ? Number(modelConfig.topP) : 1,
-          systemPrompt,
-        },
-        (chunk) => {
-          // 检查是否被中止
-          if (abortController.signal.aborted) {
-            return
-          }
-          
-          if (chunk.type === 'content' && chunk.content) {
-            // 性能优化：存入数组而非字符串拼接，O(n) vs O(n²)
-            contentChunks.push(chunk.content)
+      // 判断是否使用 Agent 模式（启用工具调用）
+      const useAgentMode = input.enableTools && adapter.supportsTools?.(model.name)
+      
+      // 获取要使用的工具定义
+      const enabledTools = useAgentMode
+        ? toolRegistry.getBuiltinTools(input.tools || ['web_search', 'get_current_time', 'calculator', 'url_reader'] as BuiltinToolType[])
+        : []
+
+      if (useAgentMode && enabledTools.length > 0) {
+        // Agent 模式：支持多轮工具调用
+        fastify.log.info(`Using Agent mode with ${enabledTools.length} tools for session ${sessionId}`)
+        
+        await executeAgent(
+          {
+            adapter,
+            apiKey,
+            model: model.name,
+            messages: contextWindow.messages,
+            options: {
+              temperature: modelConfig?.temperature ? Number(modelConfig.temperature) : 0.7,
+              maxTokens,
+              topP: modelConfig?.topP ? Number(modelConfig.topP) : 1,
+              systemPrompt,
+            },
+            tools: enabledTools,
+            config: {
+              maxIterations: 10,
+              maxToolCallsPerIteration: 3,
+              toolTimeout: 30000,
+            },
+            signal: abortController.signal,
+          },
+          (chunk) => {
+            // 检查是否被中止
+            if (abortController.signal.aborted) {
+              return
+            }
             
-            // 性能优化：通过缓冲器发送，合并小数据块
-            streamBuffer.push(chunk.content, (bufferedContent) => {
-              reply.raw.write(`data: ${JSON.stringify({
-                type: 'content',
-                content: bufferedContent
-              })}\n\n`)
-            })
-          } else if (chunk.type === 'done') {
-            // 确保所有缓冲内容都已发送
-            streamBuffer.flush((bufferedContent) => {
-              if (bufferedContent) {
+            if (chunk.type === 'content' && chunk.content) {
+              contentChunks.push(chunk.content)
+              streamBuffer.push(chunk.content, (bufferedContent) => {
                 reply.raw.write(`data: ${JSON.stringify({
                   type: 'content',
                   content: bufferedContent
                 })}\n\n`)
-              }
-            })
-            promptTokens = chunk.usage?.promptTokens || 0
-            completionTokens = chunk.usage?.completionTokens || 0
-          } else if (chunk.type === 'error') {
-            streamBuffer.dispose() // 错误时清理缓冲器
-            reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`)
+              })
+            } else if (chunk.type === 'tool_call' && chunk.toolCall) {
+              // 发送工具调用事件到前端
+              reply.raw.write(`data: ${JSON.stringify({
+                type: 'tool_call',
+                toolCall: chunk.toolCall
+              })}\n\n`)
+            } else if (chunk.type === 'tool_result' && chunk.toolResult) {
+              // 发送工具执行结果到前端
+              reply.raw.write(`data: ${JSON.stringify({
+                type: 'tool_result',
+                toolResult: chunk.toolResult
+              })}\n\n`)
+            } else if (chunk.type === 'done') {
+              streamBuffer.flush((bufferedContent) => {
+                if (bufferedContent) {
+                  reply.raw.write(`data: ${JSON.stringify({
+                    type: 'content',
+                    content: bufferedContent
+                  })}\n\n`)
+                }
+              })
+              promptTokens = chunk.usage?.promptTokens || 0
+              completionTokens = chunk.usage?.completionTokens || 0
+            } else if (chunk.type === 'error') {
+              streamBuffer.dispose()
+              reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`)
+            }
           }
-        },
-        abortController.signal // 传递 signal 给适配器
-      )
+        )
+      } else {
+        // 普通模式：直接调用 adapter
+        await adapter.streamCompletion(
+          apiKey,
+          model.name,
+          contextWindow.messages,
+          {
+            temperature: modelConfig?.temperature ? Number(modelConfig.temperature) : 0.7,
+            maxTokens,
+            topP: modelConfig?.topP ? Number(modelConfig.topP) : 1,
+            systemPrompt,
+          },
+          (chunk) => {
+            // 检查是否被中止
+            if (abortController.signal.aborted) {
+              return
+            }
+            
+            if (chunk.type === 'content' && chunk.content) {
+              // 性能优化：存入数组而非字符串拼接，O(n) vs O(n²)
+              contentChunks.push(chunk.content)
+              
+              // 性能优化：通过缓冲器发送，合并小数据块
+              streamBuffer.push(chunk.content, (bufferedContent) => {
+                reply.raw.write(`data: ${JSON.stringify({
+                  type: 'content',
+                  content: bufferedContent
+                })}\n\n`)
+              })
+            } else if (chunk.type === 'done') {
+              // 确保所有缓冲内容都已发送
+              streamBuffer.flush((bufferedContent) => {
+                if (bufferedContent) {
+                  reply.raw.write(`data: ${JSON.stringify({
+                    type: 'content',
+                    content: bufferedContent
+                  })}\n\n`)
+                }
+              })
+              promptTokens = chunk.usage?.promptTokens || 0
+              completionTokens = chunk.usage?.completionTokens || 0
+            } else if (chunk.type === 'error') {
+              streamBuffer.dispose() // 错误时清理缓冲器
+              reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`)
+            }
+          },
+          abortController.signal // 传递 signal 给适配器
+        )
+      }
 
       // 性能优化：使用 join 合并内容，避免 O(n²) 的字符串连接
       const fullContent = contentChunks.join('')

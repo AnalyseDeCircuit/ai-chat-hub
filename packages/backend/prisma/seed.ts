@@ -171,6 +171,34 @@ async function main() {
       },
       isActive: true,
     },
+
+    // Moonshot (Kimi) 模型
+    {
+      provider: 'moonshot',
+      name: 'kimi-k2-turbo-preview',
+      displayName: 'Kimi K2 Turbo',
+      contextLength: 256000,
+      inputPrice: 0.002,
+      outputPrice: 0.006,
+      capabilities: {
+        supportsVision: false,
+        supportsFiles: false,
+      },
+      isActive: true,
+    },
+    {
+      provider: 'moonshot',
+      name: 'moonshot-v1-128k',
+      displayName: 'Moonshot v1 128K',
+      contextLength: 128000,
+      inputPrice: 0.001,
+      outputPrice: 0.003,
+      capabilities: {
+        supportsVision: false,
+        supportsFiles: false,
+      },
+      isActive: true,
+    },
   ]
 
   for (const model of models) {

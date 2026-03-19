@@ -1,10 +1,12 @@
-import type { ChatMessage, StreamChunk } from '@ai-chat-hub/shared'
+import type { ChatMessage, StreamChunk, ToolDefinition } from '@ai-chat-hub/shared'
 
 export interface CompletionOptions {
   temperature?: number
   maxTokens?: number
   topP?: number
   systemPrompt?: string
+  tools?: ToolDefinition[] // Function Calling 工具列表
+  toolChoice?: 'auto' | 'none' | 'required' | { name: string } // 工具选择策略
 }
 
 export interface ModelAdapter {
@@ -33,6 +35,11 @@ export interface ModelAdapter {
    * 计算 Token 数量（估算）
    */
   countTokens(messages: ChatMessage[]): number
+
+  /**
+   * 检查模型是否支持 Function Calling
+   */
+  supportsTools?(model: string): boolean
 }
 
 /**
@@ -70,5 +77,12 @@ export abstract class BaseAdapter implements ModelAdapter {
    */
   isNearContextLimit(tokens: number, contextLimit: number, threshold = 0.9): boolean {
     return tokens >= contextLimit * threshold
+  }
+
+  /**
+   * 默认不支持 Function Calling，子类可覆盖
+   */
+  supportsTools(_model: string): boolean {
+    return false
   }
 }

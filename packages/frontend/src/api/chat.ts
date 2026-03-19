@@ -1,8 +1,22 @@
 import apiClient from './client'
-import type { ApiResponse, Message, Model } from '@ai-chat-hub/shared'
+import type { ApiResponse, Message, Model, ToolCall, ToolResult, BuiltinToolType } from '@ai-chat-hub/shared'
 import { useAuthStore } from '@/stores/auth'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
+
+export interface SendOptions {
+  webSearch?: boolean
+  enableTools?: boolean
+  tools?: BuiltinToolType[]
+}
+
+export interface StreamCallbacks {
+  onChunk: (chunk: string) => void
+  onDone: (messageId: string, usage?: { promptTokens: number; completionTokens: number }) => void
+  onError: (error: string) => void
+  onToolCall?: (toolCall: ToolCall) => void
+  onToolResult?: (toolResult: ToolResult) => void
+}
 
 export const chatApi = {
   /**
@@ -24,18 +38,16 @@ export const chatApi = {
   },
 
   /**
-   * 发送消息（流式响应）
+   * 发送消息（流式响应）- 新版支持工具调用
    */
-  sendMessage: (
+  sendMessageV2: (
     sessionId: string,
     content: string,
     modelId: string,
-    onChunk: (chunk: string) => void,
-    onDone: (messageId: string, usage?: { promptTokens: number; completionTokens: number }) => void,
-    onError: (error: string) => void,
+    callbacks: StreamCallbacks,
     images?: Array<{ base64: string; mimeType: string }>,
     files?: Array<{ fileName: string; fileType: string; mimeType: string; base64Data: string; fileSize: number }>,
-    webSearch?: boolean
+    options?: SendOptions
   ): AbortController => {
     const controller = new AbortController()
     const { accessToken } = useAuthStore.getState()
@@ -46,7 +58,16 @@ export const chatApi = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ sessionId, content, modelId, images, files, webSearch }),
+      body: JSON.stringify({ 
+        sessionId, 
+        content, 
+        modelId, 
+        images, 
+        files,
+        webSearch: options?.webSearch,
+        enableTools: options?.enableTools,
+        tools: options?.tools,
+      }),
       signal: controller.signal,
       mode: 'cors',
       credentials: 'include',
@@ -79,11 +100,15 @@ export const chatApi = {
               try {
                 const parsed = JSON.parse(data)
                 if (parsed.type === 'content' && parsed.content) {
-                  onChunk(parsed.content)
+                  callbacks.onChunk(parsed.content)
+                } else if (parsed.type === 'tool_call' && parsed.toolCall) {
+                  callbacks.onToolCall?.(parsed.toolCall)
+                } else if (parsed.type === 'tool_result' && parsed.toolResult) {
+                  callbacks.onToolResult?.(parsed.toolResult)
                 } else if (parsed.type === 'done') {
-                  onDone(parsed.messageId, parsed.usage)
+                  callbacks.onDone(parsed.messageId, parsed.usage)
                 } else if (parsed.type === 'error') {
-                  onError(parsed.error || '生成出错')
+                  callbacks.onError(parsed.error || '生成出错')
                 }
               } catch {
                 // 忽略解析错误
@@ -94,11 +119,36 @@ export const chatApi = {
       })
       .catch((error) => {
         if (error.name !== 'AbortError') {
-          onError(error.message || '请求失败')
+          callbacks.onError(error.message || '请求失败')
         }
       })
 
     return controller
+  },
+
+  /**
+   * 发送消息（流式响应）- 兼容旧版 API
+   */
+  sendMessage: (
+    sessionId: string,
+    content: string,
+    modelId: string,
+    onChunk: (chunk: string) => void,
+    onDone: (messageId: string, usage?: { promptTokens: number; completionTokens: number }) => void,
+    onError: (error: string) => void,
+    images?: Array<{ base64: string; mimeType: string }>,
+    files?: Array<{ fileName: string; fileType: string; mimeType: string; base64Data: string; fileSize: number }>,
+    webSearch?: boolean
+  ): AbortController => {
+    return chatApi.sendMessageV2(
+      sessionId, 
+      content, 
+      modelId, 
+      { onChunk, onDone, onError },
+      images, 
+      files,
+      { webSearch }
+    )
   },
 
   /**

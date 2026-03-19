@@ -1,9 +1,9 @@
 import { BaseAdapter, type CompletionOptions } from './base.js'
-import type { ChatMessage, StreamChunk } from '@ai-chat-hub/shared'
+import type { ChatMessage, StreamChunk, ToolCall, ToolDefinition } from '@ai-chat-hub/shared'
 
 interface OpenAIMessage {
-  role: 'system' | 'user' | 'assistant'
-  content: string | Array<{
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string | null | Array<{
     type: 'text' | 'image_url'
     text?: string
     image_url?: {
@@ -11,12 +11,42 @@ interface OpenAIMessage {
       detail?: 'low' | 'high' | 'auto'
     }
   }>
+  tool_calls?: OpenAIToolCall[]
+  tool_call_id?: string
+  name?: string
+}
+
+interface OpenAIToolCall {
+  id: string
+  type: 'function'
+  function: {
+    name: string
+    arguments: string
+  }
+}
+
+interface OpenAITool {
+  type: 'function'
+  function: {
+    name: string
+    description: string
+    parameters: object
+  }
 }
 
 interface OpenAIStreamChoice {
   delta: {
     content?: string
     role?: string
+    tool_calls?: Array<{
+      index: number
+      id?: string
+      type?: 'function'
+      function?: {
+        name?: string
+        arguments?: string
+      }
+    }>
   }
   finish_reason: string | null
   index: number
@@ -43,9 +73,29 @@ export class OpenAIAdapter extends BaseAdapter {
     'gpt-4-turbo',
     'gpt-4',
     'gpt-3.5-turbo',
+    'o1',
+    'o1-mini',
+    'o1-preview',
+    'o3-mini',
+  ]
+
+  // 支持 Function Calling 的模型
+  private readonly toolSupportedModels = [
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4-turbo',
+    'gpt-4',
+    'gpt-3.5-turbo',
   ]
 
   private readonly baseUrl = 'https://api.openai.com/v1'
+
+  /**
+   * 检查模型是否支持 Function Calling
+   */
+  supportsTools(model: string): boolean {
+    return this.toolSupportedModels.some(m => model.includes(m))
+  }
 
   /**
    * 验证 API 密钥
@@ -87,8 +137,30 @@ export class OpenAIAdapter extends BaseAdapter {
 
     // 转换消息格式
     for (const msg of messages) {
-      // 检查是否有图片（多模态）
-      if (msg.images && msg.images.length > 0) {
+      if (msg.role === 'tool') {
+        // 工具结果消息
+        openaiMessages.push({
+          role: 'tool',
+          content: msg.content,
+          tool_call_id: msg.toolCallId!,
+          name: msg.name,
+        })
+      } else if (msg.toolCalls && msg.toolCalls.length > 0) {
+        // 助手消息带有工具调用
+        openaiMessages.push({
+          role: 'assistant',
+          content: msg.content || null,
+          tool_calls: msg.toolCalls.map(tc => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: {
+              name: tc.name,
+              arguments: tc.arguments,
+            },
+          })),
+        })
+      } else if (msg.images && msg.images.length > 0) {
+        // 检查是否有图片（多模态）
         const contentParts: Array<{ type: 'text' | 'image_url'; text?: string; image_url?: { url: string } }> = []
         
         // 添加文本内容
@@ -122,22 +194,42 @@ export class OpenAIAdapter extends BaseAdapter {
       }
     }
 
+    // 构建请求体
+    const requestBody: Record<string, unknown> = {
+      model,
+      messages: openaiMessages,
+      temperature: options.temperature ?? 0.7,
+      max_tokens: options.maxTokens ?? 2048,
+      top_p: options.topP ?? 1,
+      stream: true,
+      stream_options: { include_usage: true },
+    }
+
+    // 添加工具定义（如果有且模型支持）
+    if (options.tools && options.tools.length > 0 && this.supportsTools(model)) {
+      requestBody.tools = this.convertTools(options.tools)
+      
+      // 工具选择策略
+      if (options.toolChoice) {
+        if (typeof options.toolChoice === 'string') {
+          requestBody.tool_choice = options.toolChoice
+        } else {
+          requestBody.tool_choice = {
+            type: 'function',
+            function: { name: options.toolChoice.name },
+          }
+        }
+      }
+    }
+
     const response = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        messages: openaiMessages,
-        temperature: options.temperature ?? 0.7,
-        max_tokens: options.maxTokens ?? 2048,
-        top_p: options.topP ?? 1,
-        stream: true,
-        stream_options: { include_usage: true },
-      }),
-      signal, // 传递 AbortSignal
+      body: JSON.stringify(requestBody),
+      signal,
     })
 
     if (!response.ok) {
@@ -154,9 +246,11 @@ export class OpenAIAdapter extends BaseAdapter {
     let buffer = ''
     let usage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
 
+    // 用于收集流式 tool_calls
+    const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>()
+
     try {
       while (true) {
-        // 检查是否被中止
         if (signal?.aborted) {
           break
         }
@@ -176,13 +270,34 @@ export class OpenAIAdapter extends BaseAdapter {
             try {
               const data: OpenAIStreamResponse = JSON.parse(trimmed.slice(6))
 
-              // 处理内容
               const choice = data.choices[0]
+              
+              // 处理内容
               if (choice?.delta?.content) {
                 onChunk({
                   type: 'content',
                   content: choice.delta.content,
                 })
+              }
+
+              // 处理流式 tool_calls
+              if (choice?.delta?.tool_calls) {
+                for (const tc of choice.delta.tool_calls) {
+                  const existing = toolCallsMap.get(tc.index)
+                  if (!existing) {
+                    // 新的 tool_call
+                    toolCallsMap.set(tc.index, {
+                      id: tc.id || '',
+                      name: tc.function?.name || '',
+                      arguments: tc.function?.arguments || '',
+                    })
+                  } else {
+                    // 追加到现有 tool_call
+                    if (tc.id) existing.id = tc.id
+                    if (tc.function?.name) existing.name += tc.function.name
+                    if (tc.function?.arguments) existing.arguments += tc.function.arguments
+                  }
+                }
               }
 
               // 处理用量统计
@@ -200,6 +315,24 @@ export class OpenAIAdapter extends BaseAdapter {
                   type: 'done',
                   usage,
                 })
+              } else if (choice?.finish_reason === 'tool_calls') {
+                // 发送所有收集到的 tool_calls
+                for (const [, tc] of toolCallsMap) {
+                  const toolCall: ToolCall = {
+                    id: tc.id,
+                    name: tc.name,
+                    arguments: tc.arguments,
+                  }
+                  onChunk({
+                    type: 'tool_call',
+                    toolCall,
+                  })
+                }
+                // 发送完成信号
+                onChunk({
+                  type: 'done',
+                  usage,
+                })
               }
             } catch {
               // 忽略解析错误
@@ -210,6 +343,20 @@ export class OpenAIAdapter extends BaseAdapter {
     } finally {
       reader.releaseLock()
     }
+  }
+
+  /**
+   * 转换工具定义为 OpenAI 格式
+   */
+  private convertTools(tools: ToolDefinition[]): OpenAITool[] {
+    return tools.map(tool => ({
+      type: 'function' as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+      },
+    }))
   }
 
   /**
@@ -229,6 +376,13 @@ export class OpenAIAdapter extends BaseAdapter {
       const otherChars = content.length - chineseChars
 
       count += Math.ceil(chineseChars / 1.5) + Math.ceil(otherChars / 4)
+
+      // 工具调用也计算 token
+      if (msg.toolCalls) {
+        for (const tc of msg.toolCalls) {
+          count += Math.ceil(tc.name.length / 4) + Math.ceil(tc.arguments.length / 4)
+        }
+      }
     }
 
     // 消息格式开销

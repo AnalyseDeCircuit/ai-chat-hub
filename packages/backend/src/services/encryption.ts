@@ -40,8 +40,8 @@ export class EncryptionService {
     // 生成随机 IV
     const iv = crypto.randomBytes(this.ivLength)
 
-    // 创建加密器
-    const cipher = crypto.createCipheriv(this.algorithm, this.key, iv)
+    // 创建加密器（使用 GCM 模式）
+    const cipher = crypto.createCipheriv(this.algorithm, this.key, iv) as crypto.CipherGCM
 
     // 加密数据
     let encrypted = cipher.update(plaintext, 'utf8', 'hex')
@@ -74,8 +74,8 @@ export class EncryptionService {
       const authTag = combined.slice(this.ivLength, this.ivLength + this.tagLength)
       const encrypted = combined.slice(this.ivLength + this.tagLength)
 
-    // 创建解密器
-    const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv)
+    // 创建解密器（使用 GCM 模式）
+    const decipher = crypto.createDecipheriv(this.algorithm, this.key, iv) as crypto.DecipherGCM
 
       decipher.setAuthTag(authTag)
 

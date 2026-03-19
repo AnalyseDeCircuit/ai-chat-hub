@@ -9,7 +9,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18.x-61dafb.svg)](https://reactjs.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-4.x-black.svg)](https://fastify.io/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 [English](README_EN.md) | 简体中文
 
@@ -329,15 +329,15 @@ chore: 构建/工具链
 
 ## 📄 许可证
 
-本项目基于 [CC-BY-NC 4.0](LICENSE) 开源。
+本项目基于 [Apache License 2.0](LICENSE) 开源。
 
 **许可证说明**:
-- ✅ 可以自由使用和修改
-- ✅ 必须署名
-- ✅ 仅限非商业用途
-- ❌ 禁止商业使用
+- ✅ 可以自由使用、修改和分发
+- ✅ 可用于商业用途
+- ✅ 必须保留原始版权声明和许可证
+- ✅ 修改的文件需注明变更
 
-详见 [LICENSE](LICENSE) 文件或访问 [Creative Commons](https://creativecommons.org/licenses/by-nc/4.0/)
+详见 [LICENSE](LICENSE) 文件或访问 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
 
 ## 🙏 致谢
 
